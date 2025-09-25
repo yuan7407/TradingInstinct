@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800">
+  <rect x="0" y="0" width="1200" height="800" fill="#ffffff"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <rect x="450" y="40" rx="8" ry="8" width="300" height="60" fill="#0066FF"/>
+    <text x="600" y="78" fill="#ffffff" font-size="20" text-anchor="middle">盘感 Trading Instinct</text>
+
+    <rect x="80" y="160" rx="6" ry="6" width="220" height="60" fill="#f2f6ff"/>
+    <text x="190" y="195" fill="#0f172a" font-size="14" text-anchor="middle">用户体验</text>
+
+    <rect x="950" y="160" rx="6" ry="6" width="220" height="60" fill="#f2f6ff"/>
+    <text x="1060" y="195" fill="#0f172a" font-size="14" text-anchor="middle">技术架构</text>
+
+    <rect x="80" y="300" rx="6" ry="6" width="220" height="60" fill="#f2f6ff"/>
+    <text x="190" y="335" fill="#0f172a" font-size="14" text-anchor="middle">游戏机制</text>
+
+    <rect x="950" y="300" rx="6" ry="6" width="220" height="60" fill="#f2f6ff"/>
+    <text x="1060" y="335" fill="#0f172a" font-size="14" text-anchor="middle">增长与变现</text>
+
+    <line x1="600" y1="100" x2="190" y2="160" stroke="#cbd8ff" stroke-width="2"/>
+    <line x1="600" y1="100" x2="1060" y2="160" stroke="#cbd8ff" stroke-width="2"/>
+    <line x1="600" y1="100" x2="190" y2="300" stroke="#cbd8ff" stroke-width="2"/>
+    <line x1="600" y1="100" x2="1060" y2="300" stroke="#cbd8ff" stroke-width="2"/>
+
+    <text x="190" y="223" fill="#0f172a" font-size="12" text-anchor="middle">立即上手 / 滑动 / 结算</text>
+    <text x="190" y="357" fill="#0f172a" font-size="12" text-anchor="middle">切片库 / 难度 / 信心倍数</text>
+    <text x="1060" y="223" fill="#0f172a" font-size="12" text-anchor="middle">小程序 / Python 后端</text>
+    <text x="1060" y="357" fill="#0f172a" font-size="12" text-anchor="middle">社交流量 / 订阅 / B端</text>
+  </g>
+</svg>

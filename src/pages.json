@@ -1,0 +1,29 @@
+{
+	"pages": [
+	  {
+		"path": "pages/index/index",
+		"style": {
+		  "navigationBarTitleText": "盘感",
+		  "navigationBarBackgroundColor": "#0a0e27",
+		  "navigationBarTextStyle": "white"
+		}
+	  },
+	  {
+		"path": "pages/result/result",
+		"style": {
+		  "navigationBarTitleText": "战绩"
+		}
+	  },
+	  {
+		"path": "pages/ranking/ranking",
+		"style": {
+		  "navigationBarTitleText": "排行榜"
+		}
+	  }
+	],
+	"globalStyle": {
+	  "navigationBarBackgroundColor": "#0a0e27",
+	  "navigationBarTextStyle": "white",
+	  "backgroundColor": "#0a0e27"
+	}
+  }

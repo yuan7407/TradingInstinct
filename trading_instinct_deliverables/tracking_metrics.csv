@@ -1,0 +1,8 @@
+event_name,trigger_condition,properties,description
+app_open,用户打开小程序,source,记录来源
+start_round,开始一局,"user_id,slice_id,difficulty",开始切片游戏
+make_guess,提交一次猜测,"slice_id,guess,confidence",记录用户每次猜测
+reveal_outcome,揭晓结果,"slice_id,actual_outcome,user_result_percent",揭晓后的得分
+view_explanation,查看AI解释,"slice_id,explanation_id",用户查看解释次数
+share_result,分享结果,"slice_id,channel",分享行为
+complete_session,完成一次会话,"rounds_played,total_session_time",整局会话完成

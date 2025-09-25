@@ -1,0 +1,7 @@
+Figma 导入与编辑说明
+1. 打开你的 Figma 文件（你已邀请助理账号）。
+2. 在 Figma 中创建一个新页面（名称: Trading Instinct - Assets）。
+3. 上传本包中的 PNG (screen_home.png, screen_game.png, screen_result.png, screen_profile.png) 到该页面。
+4. 将 mindmap.svg 直接拖入 Figma（保持为可编辑矢量）。
+5. 在 Figma 中根据需要微调文字、颜色，并把页面按顺序排列：Home -> Game -> Result -> Profile -> Mindmap。
+6. 若需要高保真或交互原型，可在每个屏幕中添加点击交互链接（Prototype tab）。
