@@ -3,9 +3,7 @@
 	  {
 		"path": "pages/index/index",
 		"style": {
-		  "navigationBarTitleText": "盘感",
-		  "navigationBarBackgroundColor": "#0a0e27",
-		  "navigationBarTextStyle": "white"
+		  "navigationBarTitleText": "盘感"
 		}
 	  },
 	  {
@@ -22,8 +20,9 @@
 	  }
 	],
 	"globalStyle": {
-	  "navigationBarBackgroundColor": "#0a0e27",
-	  "navigationBarTextStyle": "white",
-	  "backgroundColor": "#0a0e27"
+	  "navigationBarTextStyle": "black",
+	  "navigationBarTitleText": "盘感",
+	  "navigationBarBackgroundColor": "#F8F8F8",
+	  "backgroundColor": "#F8F8F8"
 	}
   }
