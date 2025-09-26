@@ -1,6 +1,13 @@
 {
 	"pages": [
 	  {
+			"path": "pages/welcome/welcome",
+			"style": {
+			  "navigationBarTitleText": "欢迎页"
+			}
+	  },
+
+	  {
 		"path": "pages/index/index",
 		"style": {
 		  "navigationBarTitleText": "盘感"

@@ -24,3 +24,7 @@ yarn-error.log*
 dist/
 node_modules/
 *.log
+dist/
+node_modules/
+*.log
+unpackage/
