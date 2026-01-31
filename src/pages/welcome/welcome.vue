@@ -1,364 +1,306 @@
 <template>
-    <view class="welcome-container">
-      <!-- 背景动画 -->
-      <canvas 
-        canvas-id="bgCanvas" 
-        class="bg-canvas"
-        :style="{width: canvasWidth + 'px', height: canvasHeight + 'px'}"
-      ></canvas>
-      
-      <!-- 主内容 -->
-      <view class="content">
-        <!-- Logo和标题 -->
-        <view class="logo-section" :class="{show: showContent}">
-          <text class="logo">📈</text>
-          <text class="title">盘感</text>
-          <text class="subtitle">Trading Instinct</text>
-        </view>
-        
-        <!-- Slogan -->
-        <view class="slogan-section" :class="{show: showSlogan}">
-          <text class="slogan">左滑右滑，练就盘感</text>
-          <text class="desc">在真实历史行情中磨练你的交易直觉</text>
-        </view>
-        
-        <!-- 登录按钮 -->
-        <view class="login-section" :class="{show: showButtons}">
-          <button class="login-btn wechat" @click="wechatLogin">
-            <text>微信登录</text>
-          </button>
-          <button class="login-btn guest" @click="guestLogin">
-            <text>游客体验</text>
-          </button>
-        </view>
-        
-        <!-- 底部信息 -->
-        <view class="footer">
-          <text class="version">v1.0.0</text>
-        </view>
+  <view class="welcome-container">
+    <image
+      class="bg-fallback"
+      src="/static/media/brand-campaign-poster.png"
+      mode="aspectFill"
+    ></image>
+    <view class="bg-overlay"></view>
+    <view class="bg-glow"></view>
+
+    <view class="content">
+      <view class="brand-block" :class="{show: showContent}">
+        <image
+          class="brand-logo"
+          src="/static/branding/trading-instinct-logo.svg"
+          mode="widthFix"
+        ></image>
+        <text class="brand-title">盘感</text>
+        <text class="brand-subtitle">Trading Instinct</text>
+      </view>
+
+      <view class="slogan-section" :class="{show: showSlogan}">
+        <text class="slogan">{{ currentSlogan }}</text>
+        <text class="desc">用真实历史行情磨练你的交易直觉</text>
+      </view>
+
+      <view class="login-section" :class="{show: showButtons}">
+        <button class="login-btn wechat" @click="wechatLogin">
+          <text>微信登录</text>
+        </button>
+        <button class="login-btn guest" @click="guestLogin">
+          <text>游客体验</text>
+        </button>
+      </view>
+
+      <view class="footer">
+        <text class="version">v1.0.0</text>
+        <text class="footer-tag">Swipe · Decide · Repeat</text>
       </view>
     </view>
-  </template>
-  
-  <script>
-  export default {
-    data() {
-      return {
-        canvasWidth: 375,
-        canvasHeight: 667,
-        showContent: false,
-        showSlogan: false,
-        showButtons: false,
-        particles: [],
-        animationId: null
-      }
+  </view>
+</template>
+
+<script>
+// 随机slogan列表
+const SLOGANS = [
+  '模拟盘都亏，你凭什么打得赢量化？',
+  '韭菜？滑两下试试',
+  '划重点不看，开卷考都不及格？',
+  '滑完才信AI教得好？'
+]
+
+export default {
+  data() {
+    return {
+      showContent: false,
+      showSlogan: false,
+      showButtons: false,
+      currentSlogan: SLOGANS[Math.floor(Math.random() * SLOGANS.length)]
+    }
+  },
+
+  onReady() {
+    this.showElements()
+  },
+
+  methods: {
+    showElements() {
+      setTimeout(() => { this.showContent = true }, 300)
+      setTimeout(() => { this.showSlogan = true }, 800)
+      setTimeout(() => { this.showButtons = true }, 1300)
     },
-    
-    onLoad() {
-      // 获取屏幕尺寸
-      const sys = uni.getSystemInfoSync()
-      this.canvasWidth = sys.windowWidth
-      this.canvasHeight = sys.windowHeight
+
+    wechatLogin() {
+      uni.setStorageSync('userInfo', {
+        nickName: '微信用户',
+        avatarUrl: '/static/default-avatar.png'
+      })
+      uni.setStorageSync('isGuest', false)
+
+      uni.showToast({
+        title: '登录成功',
+        icon: 'success',
+        duration: 1000
+      })
+
+      setTimeout(() => this.enterGame(), 1000)
     },
-    
-    onReady() {
-      this.initAnimation()
-      this.showElements()
+
+    guestLogin() {
+      uni.setStorageSync('userInfo', {
+        nickName: '游客',
+        avatarUrl: '/static/default-avatar.png'
+      })
+      uni.setStorageSync('isGuest', true)
+
+      uni.showToast({
+        title: '欢迎体验',
+        icon: 'none',
+        duration: 1000
+      })
+
+      setTimeout(() => this.enterGame(), 1000)
     },
-    
-    onUnload() {
-      // 清理动画
-      if (this.animationId) {
-        cancelAnimationFrame(this.animationId)
-      }
-    },
-    
-    methods: {
-      initAnimation() {
-        // 创建粒子动画
-        const ctx = uni.createCanvasContext('bgCanvas', this)
-        
-        // 初始化粒子
-        for(let i = 0; i < 50; i++) {
-          this.particles.push({
-            x: Math.random() * this.canvasWidth,
-            y: Math.random() * this.canvasHeight,
-            vx: (Math.random() - 0.5) * 0.5,
-            vy: (Math.random() - 0.5) * 0.5,
-            size: Math.random() * 3 + 1,
-            opacity: Math.random() * 0.5 + 0.2
-          })
-        }
-        
-        // 动画循环
-        const animate = () => {
-          ctx.setFillStyle('#0a0e27')
-          ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight)
-          
-          // 绘制连线
-          this.particles.forEach((p1, i) => {
-            this.particles.slice(i + 1).forEach(p2 => {
-              const dist = Math.sqrt(
-                Math.pow(p1.x - p2.x, 2) + 
-                Math.pow(p1.y - p2.y, 2)
-              )
-              if (dist < 100) {
-                ctx.setStrokeStyle(`rgba(0, 216, 138, ${0.2 * (1 - dist/100)})`)
-                ctx.setLineWidth(0.5)
-                ctx.beginPath()
-                ctx.moveTo(p1.x, p1.y)
-                ctx.lineTo(p2.x, p2.y)
-                ctx.stroke()
-              }
-            })
-          })
-          
-          // 绘制粒子
-          this.particles.forEach(p => {
-            // 更新位置
-            p.x += p.vx
-            p.y += p.vy
-            
-            // 边界反弹
-            if (p.x < 0 || p.x > this.canvasWidth) p.vx = -p.vx
-            if (p.y < 0 || p.y > this.canvasHeight) p.vy = -p.vy
-            
-            // 绘制
-            ctx.setFillStyle(`rgba(0, 216, 138, ${p.opacity})`)
-            ctx.beginPath()
-            ctx.arc(p.x, p.y, p.size, 0, 2 * Math.PI)
-            ctx.fill()
-          })
-          
-          ctx.draw()
-          
-          // 继续动画
-          setTimeout(() => {
-            animate()
-          }, 30)
-        }
-        
-        animate()
-      },
-      
-      showElements() {
-        // 依次显示元素
-        setTimeout(() => {
-          this.showContent = true
-        }, 300)
-        
-        setTimeout(() => {
-          this.showSlogan = true
-        }, 800)
-        
-        setTimeout(() => {
-          this.showButtons = true
-        }, 1300)
-      },
-      
-      wechatLogin() {
-        uni.showLoading({ title: '登录中...' })
-        
-        // 微信登录逻辑
-        uni.login({
-          provider: 'weixin',
-          success: (loginRes) => {
-            // 获取用户信息
-            uni.getUserProfile({
-              desc: '用于完善用户资料',
-              success: (infoRes) => {
-                // 保存用户信息
-                uni.setStorageSync('userInfo', infoRes.userInfo)
-                uni.setStorageSync('isGuest', false)
-                
-                uni.hideLoading()
-                this.enterGame()
-              },
-              fail: () => {
-                uni.hideLoading()
-                uni.showToast({
-                  title: '授权失败',
-                  icon: 'none'
-                })
-              }
-            })
-          },
-          fail: () => {
-            uni.hideLoading()
-            // 如果微信登录失败，提示游客登录
-            uni.showModal({
-              title: '提示',
-              content: '微信登录失败，是否以游客身份体验？',
-              success: (res) => {
-                if (res.confirm) {
-                  this.guestLogin()
-                }
-              }
-            })
-          }
-        })
-      },
-      
-      guestLogin() {
-        // 游客登录
-        uni.setStorageSync('userInfo', {
-          nickName: '游客',
-          avatarUrl: '/static/default-avatar.png'
-        })
-        uni.setStorageSync('isGuest', true)
-        
-        uni.showToast({
-          title: '欢迎体验',
-          icon: 'none',
-          duration: 1000
-        })
-        
-        setTimeout(() => {
-          this.enterGame()
-        }, 1000)
-      },
-      
-      enterGame() {
-        // 进入游戏主页
-        uni.redirectTo({
-          url: '/pages/index/index'
-        })
-      }
+
+    enterGame() {
+      uni.redirectTo({
+        url: '/pages/index/index'
+      })
     }
   }
-  </script>
-  
-  <style>
-  .welcome-container {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-  }
-  
-  .bg-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-  }
-  
-  .content {
-    position: relative;
-    z-index: 10;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60rpx;
-  }
-  
-  .logo-section {
-    text-align: center;
-    margin-bottom: 80rpx;
-    opacity: 0;
-    transform: translateY(-30rpx);
-    transition: all 0.8s ease;
-  }
-  
-  .logo-section.show {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  
-  .logo {
-    font-size: 120rpx;
-    display: block;
-    margin-bottom: 20rpx;
-  }
-  
-  .title {
-    font-size: 72rpx;
-    color: #fff;
-    font-weight: bold;
-    display: block;
-    margin-bottom: 10rpx;
-  }
-  
-  .subtitle {
-    font-size: 32rpx;
-    color: #8b92b9;
-    display: block;
-  }
-  
-  .slogan-section {
-    text-align: center;
-    margin-bottom: 100rpx;
-    opacity: 0;
-    transform: translateY(-20rpx);
-    transition: all 0.8s ease;
-  }
-  
-  .slogan-section.show {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  
-  .slogan {
-    font-size: 36rpx;
-    color: #00d88a;
-    display: block;
-    margin-bottom: 20rpx;
-  }
-  
-  .desc {
-    font-size: 28rpx;
-    color: #8b92b9;
-    display: block;
-  }
-  
-  .login-section {
-    width: 100%;
-    opacity: 0;
-    transform: translateY(20rpx);
-    transition: all 0.8s ease;
-  }
-  
-  .login-section.show {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  
-  .login-btn {
-    width: 100%;
-    height: 100rpx;
-    margin-bottom: 30rpx;
-    border-radius: 50rpx;
-    font-size: 32rpx;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  .login-btn.wechat {
-    background: linear-gradient(90deg, #00d88a, #00b870);
-    color: #fff;
-  }
-  
-  .login-btn.guest {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
-    border: 2rpx solid #00d88a;
-  }
-  
-  .footer {
-    position: absolute;
-    bottom: 60rpx;
-    left: 0;
-    right: 0;
-    text-align: center;
-  }
-  
-  .version {
-    color: #666;
-    font-size: 24rpx;
-  }
-  </style>
+}
+</script>
+
+<style>
+.welcome-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #0b0f1c;
+  display: flex;
+  flex-direction: column;
+}
+
+page {
+  width: 100%;
+  height: 100%;
+  background: #0b0f1c;
+}
+
+.bg-video {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  transform: scale(1.02);
+}
+
+.bg-fallback {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  transform: scale(1.02);
+}
+
+.bg-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background:
+    linear-gradient(180deg, rgba(7, 10, 20, 0.15) 0%, rgba(7, 10, 20, 0.85) 68%, rgba(7, 10, 20, 0.98) 100%),
+    radial-gradient(circle at 20% 20%, rgba(32, 194, 156, 0.12), transparent 55%);
+  z-index: 1;
+}
+
+.bg-glow {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: radial-gradient(circle at 75% 15%, rgba(255, 255, 255, 0.15), transparent 50%);
+  z-index: 1;
+  mix-blend-mode: screen;
+  opacity: 0.35;
+}
+
+.content {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 140rpx 56rpx 90rpx;
+  box-sizing: border-box;
+}
+
+.brand-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18rpx;
+  opacity: 0;
+  transform: translateY(-30rpx);
+  transition: all 0.8s ease;
+}
+
+.brand-block.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.brand-logo {
+  width: 320rpx;
+  display: block;
+}
+
+.brand-title {
+  font-size: 64rpx;
+  color: #f7f9ff;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+}
+
+.brand-subtitle {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 4rpx;
+}
+
+.slogan-section {
+  opacity: 0;
+  transform: translateY(-20rpx);
+  transition: all 0.8s ease;
+}
+
+.slogan-section.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.slogan {
+  font-size: 38rpx;
+  color: #6ee7c9;
+  display: block;
+  margin-bottom: 18rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+}
+
+.desc {
+  font-size: 26rpx;
+  color: rgba(206, 216, 242, 0.75);
+  display: block;
+}
+
+.login-section {
+  width: 100%;
+  opacity: 0;
+  transform: translateY(20rpx);
+  transition: all 0.8s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.login-section.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.login-btn {
+  width: 100%;
+  height: 96rpx;
+  border-radius: 48rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 3rpx;
+}
+
+.login-btn.wechat {
+  background: linear-gradient(135deg, #4be3a4 0%, #18c98a 100%);
+  color: #05130d;
+  box-shadow: 0 18rpx 40rpx rgba(16, 201, 138, 0.35);
+}
+
+.login-btn.guest {
+  background: rgba(12, 16, 31, 0.55);
+  color: rgba(255, 255, 255, 0.9);
+  border: 1rpx solid rgba(255, 255, 255, 0.2);
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.version {
+  font-size: 24rpx;
+  letter-spacing: 2rpx;
+}
+
+.footer-tag {
+  font-size: 22rpx;
+  letter-spacing: 2rpx;
+}
+</style>

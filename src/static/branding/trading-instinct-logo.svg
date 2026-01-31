@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 80" width="400" height="80">
+  <defs>
+    <linearGradient id="mainGradientDark" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#666666"/>
+      <stop offset="50%" stop-color="#aaaaaa"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Icon -->
+  <g transform="translate(5, 8) scale(0.65)">
+    <!-- Outer glow -->
+    <path
+      d="M8 55 Q20 55 28 40 Q36 25 48 40 Q60 55 72 32 Q84 9 94 20"
+      fill="none"
+      stroke="#2a3140"
+      stroke-width="12"
+      stroke-linecap="round"
+    />
+    <!-- Main gradient stroke -->
+    <path
+      d="M8 55 Q20 55 28 40 Q36 25 48 40 Q60 55 72 32 Q84 9 94 20"
+      fill="none"
+      stroke="url(#mainGradientDark)"
+      stroke-width="6"
+      stroke-linecap="round"
+    />
+    <!-- Start point -->
+    <circle cx="8" cy="55" r="6" fill="#666666"/>
+    <circle cx="8" cy="55" r="2.5" fill="#0f1116"/>
+    <!-- End point -->
+    <circle cx="94" cy="20" r="7" fill="white"/>
+    <circle cx="94" cy="20" r="3" fill="#0f1116"/>
+  </g>
+  
+  <!-- Text -->
+  <text x="85" y="50" font-family="AlibabaPuHuiTi, system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="28" font-weight="600" fill="white" letter-spacing="-0.5">Trading Instinct</text>
+</svg>
