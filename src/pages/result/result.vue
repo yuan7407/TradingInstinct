@@ -7,7 +7,7 @@
     <!-- 破产倒计时蒙层 -->
     <view class="countdown-overlay" v-if="showCountdown">
       <view class="countdown-content">
-        <text class="countdown-title">交易失败</text>
+        <text class="countdown-title">交易结束</text>
         <text class="countdown-subtitle">金币已耗尽</text>
         <view class="countdown-timer">
           <text class="countdown-number">{{ countdownSeconds }}</text>

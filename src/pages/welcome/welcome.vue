@@ -21,7 +21,10 @@
 
       <view class="slogan-section" :class="{show: showSlogan}">
         <text class="slogan">{{ currentSlogan }}</text>
-        <text class="desc">用真实历史行情磨练你的交易直觉</text>
+        <view class="desc">
+          <text>Trading Instinct用AI和量化模型</text>
+          <text>帮助你在真实历史行情训练你的交易直觉</text>
+        </view>
       </view>
 
       <view class="login-section" :class="{show: showButtons}">
@@ -44,10 +47,10 @@
 <script>
 // 随机slogan列表
 const SLOGANS = [
-  '模拟盘都亏，你凭什么打得赢量化？',
-  '韭菜？滑两下试试',
-  '划重点不看，开卷考都不及格？',
-  '滑完才信AI教得好？'
+  '模拟盘都亏，凭什么打得赢量化',
+  '进场前，先滑两下试试',
+  'AI划的重点不看，开卷考都不及格',
+  '学会用量化来打赢量化'
 ]
 
 export default {
@@ -245,7 +248,9 @@ page {
 .desc {
   font-size: 26rpx;
   color: rgba(206, 216, 242, 0.75);
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
 }
 
 .login-section {

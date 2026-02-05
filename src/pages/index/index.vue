@@ -15,11 +15,33 @@
       </view>
     </view>
 
-    <!-- 滑动提示 - K线图上方 -->
-    <view class="hint">
-      <text class="hint-left">← 卖出</text>
-      <text class="hint-mid">↑换股 ↓跳过</text>
-      <text class="hint-right">买入 →</text>
+    <!-- 信息区：金币、收益率、AI建议 - K线图上方 -->
+    <view class="info-section top">
+      <view class="info-row">
+        <view class="metric">
+          <text class="label">当前持仓</text>
+          <text class="value">{{ positionText }}</text>
+        </view>
+        <view class="metric right">
+          <text class="label">剩余金币</text>
+          <text class="value accent">{{ totalAsset.toFixed(0) }}</text>
+        </view>
+      </view>
+      <view class="info-row">
+        <view class="metric">
+          <text class="label">本轮收益</text>
+          <text class="value" :class="currentReturnClass">{{ currentReturnText }}</text>
+        </view>
+        <view class="metric right">
+          <text class="label">决策次数</text>
+          <text class="value">{{ currentDecision }}</text>
+        </view>
+      </view>
+      <!-- AI 建议区 -->
+      <view class="ai-hint" v-if="aiSuggestion">
+        <text class="ai-label">AI:</text>
+        <text class="ai-content">{{ aiSuggestion }}</text>
+      </view>
     </view>
 
     <!-- K线图卡片区域 -->
@@ -91,33 +113,11 @@
       </view>
     </view>
 
-    <!-- 信息区：金币、收益率、AI建议 -->
-    <view class="info-section">
-      <view class="info-row">
-        <view class="metric">
-          <text class="label">当前持仓</text>
-          <text class="value">{{ positionText }}</text>
-        </view>
-        <view class="metric right">
-          <text class="label">剩余金币</text>
-          <text class="value accent">{{ totalAsset.toFixed(0) }}</text>
-        </view>
-      </view>
-      <view class="info-row">
-        <view class="metric">
-          <text class="label">本轮收益</text>
-          <text class="value" :class="currentReturnClass">{{ currentReturnText }}</text>
-        </view>
-        <view class="metric right">
-          <text class="label">决策次数</text>
-          <text class="value">{{ currentDecision }}</text>
-        </view>
-      </view>
-      <!-- AI 建议区 -->
-      <view class="ai-hint" v-if="aiSuggestion">
-        <text class="ai-label">AI:</text>
-        <text class="ai-content">{{ aiSuggestion }}</text>
-      </view>
+    <!-- 滑动提示 - 时间周期下方 -->
+    <view class="hint bottom">
+      <text class="hint-left">← 卖出</text>
+      <text class="hint-mid">↑换股 ↓跳过</text>
+      <text class="hint-right">买入 →</text>
     </view>
 
     <!-- 底部功能按钮 - PICNIC风格小图标 -->
@@ -142,6 +142,55 @@
           <view class="pulse"></view>
         </view>
         <text class="action-text">AI</text>
+      </view>
+    </view>
+
+    <!-- 金币奖励弹窗 -->
+    <view class="coin-popup-overlay" v-if="showCoinPopup" @tap="dismissCoinPopup">
+      <view class="coin-popup" @tap.stop>
+        <view class="coin-popup-icon">🪙</view>
+        <text class="coin-popup-title">{{ coinPopupTitle }}</text>
+        <text class="coin-popup-amount">+{{ coinPopupAmount }}</text>
+        <text class="coin-popup-label">金币</text>
+        <view class="coin-popup-btn" @tap="dismissCoinPopup">
+          <text>开始交易</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 交易结果弹窗 -->
+    <view class="trade-popup" v-if="tradePopup.show" @tap="dismissTradePopup">
+      <view class="trade-popup-content">
+        <text class="trade-popup-title">{{ tradePopup.title }}</text>
+        <view class="trade-popup-lines">
+          <text v-for="(line, idx) in tradePopup.lines" :key="idx" class="trade-popup-line">{{ line }}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 新手操作指引弹窗 -->
+    <view class="guide-popup-overlay" v-if="showGuidePopup" @tap="dismissGuidePopup">
+      <view class="guide-popup" @tap.stop>
+        <text class="guide-title">操作指引</text>
+        <view class="guide-items">
+          <view class="guide-item">
+            <text class="guide-arrow right">→</text>
+            <text class="guide-text">右滑买入</text>
+          </view>
+          <view class="guide-item">
+            <text class="guide-arrow left">←</text>
+            <text class="guide-text">左滑卖出</text>
+          </view>
+          <view class="guide-item">
+            <text class="guide-arrow up">↑</text>
+            <text class="guide-text">上滑换股</text>
+          </view>
+          <view class="guide-item">
+            <text class="guide-arrow down">↓</text>
+            <text class="guide-text">下滑跳过</text>
+          </view>
+        </view>
+        <text class="guide-tip">长按可2倍仓位操作</text>
       </view>
     </view>
   </view>
@@ -188,7 +237,23 @@ export default {
       // Canvas 缓存（避免重复查询）
       _cachedCanvas: null,
       _cachedCtx: null,
-      _cachedDimensions: null
+      _cachedDimensions: null,
+
+      // 金币奖励弹窗
+      showCoinPopup: false,
+      coinPopupType: '', // 'initial' | 'daily'
+      coinPopupAmount: 0,
+      pendingDailyReward: false, // 标记是否需要在初始金币弹窗后显示每日奖励
+
+      // 交易结果弹窗
+      tradePopup: {
+        show: false,
+        title: '',
+        lines: []
+      },
+
+      // 新手指引弹窗
+      showGuidePopup: false
     }
   },
 
@@ -278,13 +343,18 @@ export default {
     showSell() { return this.swipeDirection === 'sell' },
     showSell2x() { return this.swipeDirection === 'sell2x' },
     showNext() { return this.swipeDirection === 'next' },
-    showSkip() { return this.swipeDirection === 'skip' }
+    showSkip() { return this.swipeDirection === 'skip' },
+
+    // 金币弹窗标题
+    coinPopupTitle() {
+      return this.coinPopupType === 'initial' ? '🎉 新手礼包' : '📅 每日签到'
+    }
   },
 
   onReady() {
     if (!this.isInitialized) {
       this.isInitialized = true
-      this.checkAndRestoreGame()
+      this.checkCoinRewardsAndStart()
     }
   },
 
@@ -297,6 +367,99 @@ export default {
   },
 
   methods: {
+    // === 金币奖励检查 ===
+    checkCoinRewardsAndStart() {
+      const isNewUser = !uni.getStorageSync('hasReceivedInitialCoins')
+      const today = new Date().toDateString()
+      const lastDailyReward = uni.getStorageSync('lastDailyRewardDate')
+      const canClaimDaily = lastDailyReward !== today
+
+      if (isNewUser) {
+        // 新用户：发放初始金币
+        const initialCoins = Math.floor(Math.random() * 20001) + 10000 // 10000-30000
+        this.totalAsset = initialCoins
+        uni.setStorageSync('userAsset', initialCoins)
+        uni.setStorageSync('hasReceivedInitialCoins', true)
+
+        // 显示初始金币弹窗
+        this.coinPopupType = 'initial'
+        this.coinPopupAmount = initialCoins
+        this.showCoinPopup = true
+
+        // 标记需要在之后显示每日奖励（新用户第一天也算签到）
+        uni.setStorageSync('lastDailyRewardDate', today)
+        this.pendingDailyReward = false // 新用户首日不再单独显示每日签到
+      } else if (canClaimDaily) {
+        // 老用户每日签到
+        const dailyCoins = Math.floor(Math.random() * 15001) + 5000 // 5000-20000
+        this.totalAsset = (uni.getStorageSync('userAsset') || 0) + dailyCoins
+        uni.setStorageSync('userAsset', this.totalAsset)
+        uni.setStorageSync('lastDailyRewardDate', today)
+
+        // 显示每日签到弹窗
+        this.coinPopupType = 'daily'
+        this.coinPopupAmount = dailyCoins
+        this.showCoinPopup = true
+      } else {
+        // 无奖励，直接开始游戏
+        this.checkAndRestoreGame()
+      }
+    },
+
+    dismissCoinPopup() {
+      this.showCoinPopup = false
+
+      if (this.pendingDailyReward) {
+        // 如果有待显示的每日奖励，继续显示
+        this.pendingDailyReward = false
+        const dailyCoins = Math.floor(Math.random() * 15001) + 5000
+        this.totalAsset += dailyCoins
+        uni.setStorageSync('userAsset', this.totalAsset)
+
+        this.coinPopupType = 'daily'
+        this.coinPopupAmount = dailyCoins
+        this.showCoinPopup = true
+      } else {
+        // 所有弹窗显示完毕，开始游戏
+        this.checkAndRestoreGame()
+      }
+    },
+
+    // === 交易结果弹窗 ===
+    showTradePopup(title, lines) {
+      this.tradePopup = { show: true, title, lines }
+      // 4秒后自动消失
+      if (this._tradePopupTimer) clearTimeout(this._tradePopupTimer)
+      this._tradePopupTimer = setTimeout(() => {
+        this.tradePopup.show = false
+      }, 4000)
+    },
+
+    dismissTradePopup() {
+      this.tradePopup.show = false
+      if (this._tradePopupTimer) {
+        clearTimeout(this._tradePopupTimer)
+        this._tradePopupTimer = null
+      }
+    },
+
+    // === 新手指引弹窗 ===
+    showGuideIfFirstTime() {
+      const hasSeenGuide = uni.getStorageSync('hasSeenGuide')
+      if (!hasSeenGuide) {
+        this.showGuidePopup = true
+        uni.setStorageSync('hasSeenGuide', true)
+        // 3秒后自动消失
+        setTimeout(() => {
+          this.showGuidePopup = false
+        }, 3000)
+      }
+    },
+
+    dismissGuidePopup() {
+      this.showGuidePopup = false
+    },
+
     // === 游戏状态管理 ===
     checkAndRestoreGame() {
       const savedState = uni.getStorageSync('gameState')
@@ -614,6 +777,7 @@ export default {
 
       this.$nextTick(() => {
         this.drawChart()
+        this.showGuideIfFirstTime()
       })
     },
 
@@ -657,18 +821,18 @@ export default {
       const tradeAmount = Math.min(baseAmount, this.totalAsset)
       const sharesToBuy = tradeAmount / currentPrice
       const multiplierText = multiplier > 1 ? `${multiplier}X ` : ''
+      const stockName = this.currentStockInfo?.name || '股票'
+      const isAddPosition = this.currentHolding > 0
 
-      if (this.currentHolding > 0) {
+      if (isAddPosition) {
         // 加仓
         const totalCost = (this.avgBuyPrice * this.currentHolding) + tradeAmount
         this.currentHolding += sharesToBuy
         this.avgBuyPrice = totalCost / this.currentHolding
-        uni.showToast({ title: `${multiplierText}加仓 ${sharesToBuy.toFixed(2)} 股`, icon: 'none', duration: 800 })
       } else {
         // 新建仓
         this.currentHolding = sharesToBuy
         this.avgBuyPrice = currentPrice
-        uni.showToast({ title: `${multiplierText}买入 ${sharesToBuy.toFixed(2)} 股`, icon: 'none', duration: 800 })
       }
 
       this.totalAsset -= tradeAmount
@@ -681,23 +845,31 @@ export default {
         index: this.currentIndex - 1
       })
 
+      // 显示交易弹窗
+      const title = isAddPosition ? `${multiplierText}加仓成功` : `${multiplierText}买入成功`
+      this.showTradePopup(title, [
+        `${stockName} ${sharesToBuy.toFixed(2)} 股`,
+        `花费 ${tradeAmount.toFixed(0)} 金币`,
+        `当前持仓 ${this.currentHolding.toFixed(2)} 股`
+      ])
+
       this.advanceChart()
     },
 
     handleSell(currentPrice, multiplier = 1) {
+      const stockName = this.currentStockInfo?.name || '股票'
+
       if (this.currentHolding > 0) {
         // 平多仓
-        const sellAmount = this.currentHolding * currentPrice
-        const profit = (currentPrice - this.avgBuyPrice) * this.currentHolding
+        const soldShares = this.currentHolding
+        const sellAmount = soldShares * currentPrice
+        const profit = (currentPrice - this.avgBuyPrice) * soldShares
 
         this.totalAsset += sellAmount
-        const profitText = profit >= 0 ? `盈利 ${profit.toFixed(0)}` : `亏损 ${Math.abs(profit).toFixed(0)}`
-        uni.showToast({ title: profitText, icon: 'none', duration: 1000 })
-
         this.decisions.push({
           type: 'sell',
           price: currentPrice,
-          shares: this.currentHolding,
+          shares: soldShares,
           amount: sellAmount,
           profit: profit,
           index: this.currentIndex - 1
@@ -705,6 +877,14 @@ export default {
 
         this.currentHolding = 0
         this.avgBuyPrice = 0
+
+        // 显示交易弹窗
+        const profitText = profit >= 0 ? `盈利 ${profit.toFixed(0)} 金币` : `亏损 ${Math.abs(profit).toFixed(0)} 金币`
+        this.showTradePopup('卖出平仓', [
+          `${stockName} ${soldShares.toFixed(2)} 股`,
+          profitText,
+          '当前无持仓'
+        ])
       } else if (this.currentHolding === 0) {
         // 开空仓
         if (this.totalAsset < 100) {
@@ -721,8 +901,6 @@ export default {
         this.avgBuyPrice = currentPrice
         this.totalAsset -= tradeAmount
 
-        uni.showToast({ title: `${multiplierText}做空 ${sharesToShort.toFixed(2)} 股`, icon: 'none', duration: 800 })
-
         this.decisions.push({
           type: 'short',
           price: currentPrice,
@@ -731,6 +909,13 @@ export default {
           multiplier: multiplier,
           index: this.currentIndex - 1
         })
+
+        // 显示交易弹窗
+        this.showTradePopup(`${multiplierText}做空成功`, [
+          `${stockName} ${sharesToShort.toFixed(2)} 股`,
+          `保证金 ${tradeAmount.toFixed(0)} 金币`,
+          `当前空仓 ${Math.abs(this.currentHolding).toFixed(2)} 股`
+        ])
       } else {
         // 加空 - 需要检查资金
         if (this.totalAsset < 100) {
@@ -748,8 +933,6 @@ export default {
         this.avgBuyPrice = totalCost / Math.abs(this.currentHolding)
         this.totalAsset -= tradeAmount
 
-        uni.showToast({ title: `${multiplierText}加空 ${sharesToShort.toFixed(2)} 股`, icon: 'none', duration: 800 })
-
         this.decisions.push({
           type: 'short',
           price: currentPrice,
@@ -758,30 +941,45 @@ export default {
           multiplier: multiplier,
           index: this.currentIndex - 1
         })
+
+        // 显示交易弹窗
+        this.showTradePopup(`${multiplierText}加空成功`, [
+          `${stockName} ${sharesToShort.toFixed(2)} 股`,
+          `保证金 ${tradeAmount.toFixed(0)} 金币`,
+          `当前空仓 ${Math.abs(this.currentHolding).toFixed(2)} 股`
+        ])
       }
 
       this.advanceChart()
     },
 
     coverShort(currentPrice) {
+      const stockName = this.currentStockInfo?.name || '股票'
       const shares = Math.abs(this.currentHolding)
       const profit = (this.avgBuyPrice - currentPrice) * shares
 
       // 平空：买回股票 + 解冻卖出收入 + 退回保证金
       this.totalAsset = this.totalAsset - currentPrice * shares + 2 * this.avgBuyPrice * shares
 
-      const profitText = profit >= 0 ? `平空盈利 ${profit.toFixed(0)}` : `平空亏损 ${Math.abs(profit).toFixed(0)}`
-      uni.showToast({ title: profitText, icon: 'none', duration: 800 })
-
       this.decisions.push({
         type: 'cover',
         price: currentPrice,
         profit: profit,
+        shares: shares,
         index: this.currentIndex - 1
       })
 
       this.currentHolding = 0
       this.avgBuyPrice = 0
+
+      // 显示交易弹窗
+      const profitText = profit >= 0 ? `盈利 ${profit.toFixed(0)} 金币` : `亏损 ${Math.abs(profit).toFixed(0)} 金币`
+      this.showTradePopup('平空成功', [
+        `${stockName} ${shares.toFixed(2)} 股`,
+        profitText,
+        '当前无持仓'
+      ])
+
       this.isProcessing = false
     },
 
@@ -1530,9 +1728,15 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 8rpx;
+  padding: 12rpx 16rpx;
   color: rgba(180, 196, 228, 0.6);
   font-size: 22rpx;
+}
+
+.hint.bottom {
+  background: rgba(12, 18, 32, 0.5);
+  border-radius: 16rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.06);
 }
 
 .hint-left {
@@ -1726,5 +1930,206 @@ export default {
 .period-btn:active {
   transform: scale(0.95);
   opacity: 0.8;
+}
+
+/* 金币奖励弹窗 */
+.coin-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.coin-popup {
+  width: 560rpx;
+  background: linear-gradient(180deg, #1a2340 0%, #0d1220 100%);
+  border-radius: 32rpx;
+  padding: 60rpx 40rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 2rpx solid rgba(255, 216, 111, 0.3);
+  box-shadow: 0 20rpx 80rpx rgba(255, 216, 111, 0.2);
+}
+
+.coin-popup-icon {
+  font-size: 100rpx;
+  margin-bottom: 20rpx;
+}
+
+.coin-popup-title {
+  font-size: 36rpx;
+  color: #fff;
+  font-weight: 600;
+  margin-bottom: 30rpx;
+}
+
+.coin-popup-amount {
+  font-size: 80rpx;
+  color: #ffd86f;
+  font-weight: 800;
+  text-shadow: 0 4rpx 20rpx rgba(255, 216, 111, 0.5);
+  line-height: 1;
+}
+
+.coin-popup-label {
+  font-size: 28rpx;
+  color: rgba(255, 216, 111, 0.8);
+  margin-top: 10rpx;
+  margin-bottom: 40rpx;
+}
+
+.coin-popup-btn {
+  width: 100%;
+  height: 88rpx;
+  background: linear-gradient(135deg, #4be3a4 0%, #18c98a 100%);
+  border-radius: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10rpx 30rpx rgba(16, 201, 138, 0.4);
+}
+
+.coin-popup-btn text {
+  font-size: 32rpx;
+  color: #05130d;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+}
+
+/* 交易结果弹窗 */
+.trade-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 500;
+  pointer-events: auto;
+}
+
+.trade-popup-content {
+  background: rgba(20, 28, 50, 0.95);
+  border: 1rpx solid rgba(255, 255, 255, 0.15);
+  border-radius: 20rpx;
+  padding: 28rpx 36rpx;
+  min-width: 380rpx;
+  box-shadow: 0 10rpx 40rpx rgba(0, 0, 0, 0.5);
+}
+
+.trade-popup-title {
+  display: block;
+  font-size: 32rpx;
+  color: #4be3a4;
+  font-weight: 700;
+  margin-bottom: 16rpx;
+  text-align: center;
+}
+
+.trade-popup-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.trade-popup-line {
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* 新手指引弹窗 */
+.guide-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 600;
+}
+
+.guide-popup {
+  background: rgba(20, 28, 50, 0.98);
+  border: 1rpx solid rgba(255, 255, 255, 0.15);
+  border-radius: 24rpx;
+  padding: 40rpx;
+  min-width: 440rpx;
+  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.5);
+}
+
+.guide-title {
+  display: block;
+  font-size: 36rpx;
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 32rpx;
+}
+
+.guide-items {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.guide-item {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.guide-arrow {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.guide-arrow.right {
+  background: rgba(75, 227, 164, 0.2);
+  color: #4be3a4;
+}
+
+.guide-arrow.left {
+  background: rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+}
+
+.guide-arrow.up {
+  background: rgba(100, 150, 255, 0.2);
+  color: #6496ff;
+}
+
+.guide-arrow.down {
+  background: rgba(255, 216, 111, 0.2);
+  color: #ffd86f;
+}
+
+.guide-text {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.guide-tip {
+  display: block;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  margin-top: 28rpx;
 }
 </style>
