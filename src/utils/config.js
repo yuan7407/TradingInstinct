@@ -55,7 +55,7 @@ export const MARKET_RULES = {
 // 预设关卡数据（股票信息）
 // market: 'us'=美股(可做空), 'cn_a'=A股(不可做空), 'hk'=港股(不可做空), 'crypto'=加密(可做空)
 export const PRESET_LEVELS = [
-  // === 美股 ===
+  // === 美股（可做空）===
   { symbol: 'NVDA',    name: '英伟达',     market: 'us', period: '2023-01-01/2024-01-01', description: 'AI芯片龙头的黄金时期' },
   { symbol: 'AAPL',    name: '苹果',       market: 'us', period: '2022-06-01/2023-06-01', description: '供应链恢复期' },
   { symbol: 'TSLA',    name: '特斯拉',     market: 'us', period: '2021-01-01/2022-01-01', description: '电动车泡沫高峰' },
@@ -69,8 +69,25 @@ export const PRESET_LEVELS = [
   { symbol: 'JPM',     name: '摩根大通',   market: 'us', period: '2022-01-01/2023-01-01', description: '加息周期与银行板块波动' },
   { symbol: 'XOM',     name: '埃克森美孚', market: 'us', period: '2021-06-01/2022-06-01', description: '能源价格高位运行' },
   { symbol: 'DIS',     name: '迪士尼',     market: 'us', period: '2022-03-01/2023-03-01', description: '流媒体转型压力' },
-  // === 加密货币 ===
+  { symbol: 'PLTR',    name: 'Palantir',   market: 'us', period: '2023-01-01/2024-01-01', description: 'AI数据分析平台爆发' },
+  { symbol: 'AVGO',    name: '博通',       market: 'us', period: '2023-06-01/2024-06-01', description: 'AI基础设施芯片受益' },
+  { symbol: 'CRM',     name: 'Salesforce', market: 'us', period: '2022-09-01/2023-09-01', description: 'SaaS龙头降本增效' },
+  { symbol: 'UBER',    name: 'Uber',       market: 'us', period: '2023-01-01/2024-01-01', description: '出行平台盈利拐点' },
+  { symbol: 'ABNB',    name: 'Airbnb',     market: 'us', period: '2022-06-01/2023-06-01', description: '旅游复苏红利' },
+  { symbol: 'SQ',      name: 'Block',      market: 'us', period: '2021-06-01/2022-06-01', description: '支付科技估值回调' },
+  { symbol: 'PYPL',    name: 'PayPal',     market: 'us', period: '2021-07-01/2022-07-01', description: '支付巨头增长瓶颈' },
+  { symbol: 'SHOP',    name: 'Shopify',    market: 'us', period: '2021-11-01/2022-11-01', description: '电商SaaS泡沫破裂' },
+  { symbol: 'ARM',     name: 'ARM',        market: 'us', period: '2023-09-01/2024-06-01', description: 'AI芯片架构IPO热潮' },
+  { symbol: 'SNOW',    name: 'Snowflake',  market: 'us', period: '2022-01-01/2023-01-01', description: '云数据仓库高增长' },
+  { symbol: 'COIN',    name: 'Coinbase',   market: 'us', period: '2021-04-01/2022-04-01', description: '加密交易所上市元年' },
+  { symbol: 'NET',     name: 'Cloudflare', market: 'us', period: '2022-01-01/2023-01-01', description: '网络安全高成长' },
+  { symbol: 'INTC',    name: '英特尔',     market: 'us', period: '2022-01-01/2023-01-01', description: '芯片巨头转型阵痛' },
+  { symbol: 'BA',      name: '波音',       market: 'us', period: '2022-06-01/2023-06-01', description: '航空制造复苏与安全危机' },
+  { symbol: 'SOFI',    name: 'SoFi',       market: 'us', period: '2022-01-01/2023-01-01', description: '金融科技新势力' },
+  // === 加密货币（可做空）===
   { symbol: 'BTC/USD', name: '比特币',     market: 'crypto', period: '2020-10-01/2021-04-01', description: '加密货币牛市' },
+  { symbol: 'ETH/USD', name: '以太坊',     market: 'crypto', period: '2021-01-01/2021-11-01', description: 'DeFi与NFT生态爆发' },
+  { symbol: 'DOGE/USD', name: '狗狗币',    market: 'crypto', period: '2021-01-01/2021-07-01', description: 'Meme币社交媒体狂潮' },
   // === A股（不可做空）===
   { symbol: '600519',  name: '贵州茅台',   market: 'cn_a', period: '2023-01-01/2024-01-01', description: '白酒龙头消费复苏' },
   { symbol: '300750',  name: '宁德时代',   market: 'cn_a', period: '2022-01-01/2023-01-01', description: '动力电池行业领跑者' },
@@ -79,12 +96,27 @@ export const PRESET_LEVELS = [
   { symbol: '000858',  name: '五粮液',     market: 'cn_a', period: '2021-01-01/2022-01-01', description: '高端白酒景气周期' },
   { symbol: '600036',  name: '招商银行',   market: 'cn_a', period: '2023-01-01/2024-01-01', description: '零售银行利率调整' },
   { symbol: '002049',  name: '紫光国微',   market: 'cn_a', period: '2022-06-01/2023-06-01', description: '芯片设计国产替代' },
+  { symbol: '300059',  name: '东方财富',   market: 'cn_a', period: '2021-06-01/2022-06-01', description: '互联网券商龙头波动' },
+  { symbol: '600276',  name: '恒瑞医药',   market: 'cn_a', period: '2021-01-01/2022-01-01', description: '创新药龙头集采压力' },
+  { symbol: '000333',  name: '美的集团',   market: 'cn_a', period: '2023-01-01/2024-01-01', description: '家电龙头出海扩张' },
+  { symbol: '002475',  name: '立讯精密',   market: 'cn_a', period: '2022-01-01/2023-01-01', description: '消费电子代工龙头' },
+  { symbol: '601899',  name: '紫金矿业',   market: 'cn_a', period: '2023-01-01/2024-01-01', description: '黄金铜矿资源景气' },
+  { symbol: '300274',  name: '阳光电源',   market: 'cn_a', period: '2022-06-01/2023-06-01', description: '光伏逆变器全球龙头' },
+  { symbol: '601012',  name: '隆基绿能',   market: 'cn_a', period: '2022-01-01/2023-01-01', description: '光伏硅片产能过剩' },
+  { symbol: '600900',  name: '长江电力',   market: 'cn_a', period: '2023-01-01/2024-01-01', description: '水电防御龙头稳健' },
   // === 港股（不可做空）===
   { symbol: '0700.HK', name: '腾讯控股',   market: 'hk', period: '2022-01-01/2023-01-01', description: '互联网监管后复苏' },
   { symbol: '1810.HK', name: '小米集团',   market: 'hk', period: '2023-01-01/2024-01-01', description: '消费电子与造车新篇' },
   { symbol: '3690.HK', name: '美团',       market: 'hk', period: '2022-06-01/2023-06-01', description: '本地生活竞争加剧' },
   { symbol: '9988.HK', name: '阿里巴巴',   market: 'hk', period: '2022-01-01/2023-01-01', description: '电商格局重塑' },
-  { symbol: '9618.HK', name: '京东集团',   market: 'hk', period: '2022-06-01/2023-06-01', description: '电商物流一体化' }
+  { symbol: '9618.HK', name: '京东集团',   market: 'hk', period: '2022-06-01/2023-06-01', description: '电商物流一体化' },
+  { symbol: '0388.HK', name: '港交所',     market: 'hk', period: '2023-01-01/2024-01-01', description: '资本市场枢纽地位' },
+  { symbol: '2318.HK', name: '中国平安HK', market: 'hk', period: '2022-06-01/2023-06-01', description: '保险金融港股估值修复' },
+  { symbol: '1211.HK', name: '比亚迪HK',   market: 'hk', period: '2023-01-01/2024-01-01', description: '新能源车港股表现' },
+  { symbol: '0941.HK', name: '中国移动',   market: 'hk', period: '2023-01-01/2024-01-01', description: '电信央企高股息' },
+  { symbol: '2020.HK', name: '安踏体育',   market: 'hk', period: '2022-01-01/2023-01-01', description: '国潮运动品牌崛起' },
+  { symbol: '1024.HK', name: '快手',       market: 'hk', period: '2021-06-01/2022-06-01', description: '短视频商业化探索' },
+  { symbol: '2015.HK', name: '理想汽车',   market: 'hk', period: '2023-01-01/2024-01-01', description: '增程式电动SUV爆发' }
 ]
 
 // 时间周期配置

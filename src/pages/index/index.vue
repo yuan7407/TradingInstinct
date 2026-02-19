@@ -193,11 +193,52 @@
         <text class="guide-tip">长按可2倍仓位操作</text>
       </view>
     </view>
+
+    <!-- 股票选择器浮层 -->
+    <view class="picker-overlay" v-if="showStockPicker"
+      :class="{ 'picker-closing': pickerClosing }">
+      <view class="picker-spot-a" :class="pickerBgClass"></view>
+      <view class="picker-spot-b" :class="pickerBgClass"></view>
+
+      <view class="picker-header">
+        <text class="picker-title">选择股票</text>
+        <text class="picker-sub">左右滑动浏览 · 点击卡片确认</text>
+      </view>
+
+      <swiper class="picker-swiper"
+        :current="pickerIndex" circular
+        previous-margin="160rpx" next-margin="160rpx"
+        @change="onPickerChange">
+        <swiper-item v-for="(stock, idx) in pickerStocks" :key="idx">
+          <view class="picker-card"
+            :class="{ 'picker-card-active': idx === pickerIndex, 'picker-card-prev': idx === pickerPrevIdx, 'picker-card-next': idx === pickerNextIdx, 'card-us': stock.market === 'us', 'card-cn_a': stock.market === 'cn_a', 'card-hk': stock.market === 'hk', 'card-crypto': stock.market === 'crypto' }"
+            @tap="onPickerCardTap(idx)">
+            <view class="picker-card-market" :class="'market-' + stock.market">
+              {{ getPickerMarketLabel(stock.market) }}
+            </view>
+            <text class="picker-card-name">{{ stock.name }}</text>
+            <text class="picker-card-symbol">{{ stock.symbol }}</text>
+            <text class="picker-card-desc">{{ stock.description }}</text>
+          </view>
+        </swiper-item>
+      </swiper>
+
+      <text class="picker-warning">切换股票将结算当前持仓</text>
+
+      <view class="picker-actions">
+        <view class="picker-btn-back" @tap="closeStockPicker">
+          <text>返回</text>
+        </view>
+        <view class="picker-btn-ai" @tap="goToDeepAnalysis">
+          <text>AI分析</text>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script>
-import { GAME_CONFIG, MARKET_RULES, TIME_PERIODS, DEFAULT_TIME_PERIOD, TIME_PERIOD_ORDER } from '@/utils/config'
+import { GAME_CONFIG, MARKET_RULES, TIME_PERIODS, DEFAULT_TIME_PERIOD, TIME_PERIOD_ORDER, PRESET_LEVELS } from '@/utils/config'
 import { generateMockData, extractGameSegment, getRandomStockInfo, fetchHistoricalData, calculateDateRange } from '@/utils/stockData'
 import { getQuickAISuggestion } from '@/utils/aiAnalysis'
 
@@ -253,7 +294,13 @@ export default {
       },
 
       // 新手指引弹窗
-      showGuidePopup: false
+      showGuidePopup: false,
+
+      // 股票选择器
+      showStockPicker: false,
+      pickerIndex: 0,
+      pickerStocks: [],
+      pickerClosing: false
     }
   },
 
@@ -350,6 +397,23 @@ export default {
     // 金币弹窗标题
     coinPopupTitle() {
       return this.coinPopupType === 'initial' ? '🎉 新手礼包' : '📅 每日签到'
+    },
+
+    // 选择器背景色类名（跟随当前高亮卡片的市场）
+    pickerBgClass() {
+      if (!this.pickerStocks.length) return 'picker-bg-us'
+      const stock = this.pickerStocks[this.pickerIndex]
+      return stock ? 'picker-bg-' + stock.market : 'picker-bg-us'
+    },
+
+    // 3D 轮盘：前一张/后一张卡片索引（循环）
+    pickerPrevIdx() {
+      const len = this.pickerStocks.length
+      return len ? (this.pickerIndex - 1 + len) % len : -1
+    },
+    pickerNextIdx() {
+      const len = this.pickerStocks.length
+      return len ? (this.pickerIndex + 1) % len : -1
     }
   },
 
@@ -724,8 +788,55 @@ export default {
     },
 
     // === 股票切换 ===
-    async switchToNextStock() {
+    switchToNextStock() {
       if (this.isProcessing) return
+      this.openStockPicker()
+    },
+
+    // 打开股票选择器
+    openStockPicker() {
+      // 洗牌 PRESET_LEVELS，排除当前股票
+      const currentSymbol = this.currentStockInfo?.symbol
+      const available = PRESET_LEVELS.filter(s => s.symbol !== currentSymbol)
+      // Fisher-Yates 洗牌
+      for (let i = available.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [available[i], available[j]] = [available[j], available[i]]
+      }
+      this.pickerStocks = available
+      this.pickerIndex = 0
+      this.pickerClosing = false
+      this.showStockPicker = true
+    },
+
+    closeStockPicker() {
+      if (this.pickerClosing) return
+      this.pickerClosing = true
+      // 等退出动画结束后移除 DOM
+      setTimeout(() => {
+        this.showStockPicker = false
+        this.pickerClosing = false
+      }, 350)
+    },
+
+    onPickerChange(e) {
+      this.pickerIndex = e.detail.current
+    },
+
+    onPickerCardTap(idx) {
+      if (this.pickerClosing) return
+      if (idx !== this.pickerIndex) {
+        // 点击非中心卡片 → 导航到该卡片
+        this.pickerIndex = idx
+        return
+      }
+      // 点击中心卡片 → 确认选择
+      this.confirmStockSwitch(this.pickerStocks[idx])
+    },
+
+    async confirmStockSwitch(stock) {
+      if (this.pickerClosing) return
+      this.pickerClosing = true
       this.isProcessing = true
 
       // 如果有持仓，自动平仓
@@ -733,13 +844,24 @@ export default {
         this.closePosition()
       }
 
-      // 保存资产并清除游戏状态（开始新股票）
+      // 保存资产并清除游戏状态
       uni.setStorageSync('userAsset', this.totalAsset)
       uni.removeStorageSync('gameState')
 
-      // 加载新股票
-      await this.loadNewStock()
+      // 动画期间静默加载（无 loading 提示）
+      const loadPromise = this.loadNewStock(stock, { silent: true })
+
+      // 等卡片放大动画完成
+      await new Promise(resolve => setTimeout(resolve, 500))
+      await loadPromise
+
+      this.showStockPicker = false
+      this.pickerClosing = false
       this.isProcessing = false
+    },
+
+    getPickerMarketLabel(market) {
+      return MARKET_RULES[market]?.label || market
     },
 
     // 平仓当前持仓
@@ -770,22 +892,23 @@ export default {
       this.avgBuyPrice = 0
     },
 
-    // 加载新股票
-    async loadNewStock() {
+    // 加载新股票（可传入指定股票，silent=true 时不显示 loading）
+    async loadNewStock(specificStock = null, options = {}) {
+      const { silent = false } = options
       // 清除 Canvas 缓存（切换股票时需要重新初始化）
       this._cachedCanvas = null
       this._cachedCtx = null
       this._cachedDimensions = null
 
-      uni.showLoading({ title: '加载中...' })
+      if (!silent) uni.showLoading({ title: '加载中...' })
 
       try {
         // 获取当前时间周期配置
         const dateRange = calculateDateRange(this.currentPeriod)
         const periodConfig = TIME_PERIODS[this.currentPeriod]
 
-        // 随机选择一只股票
-        const stockInfo = getRandomStockInfo()
+        // 使用指定股票或随机选择
+        const stockInfo = specificStock || getRandomStockInfo()
 
         // 使用时间周期参数获取数据
         const data = await fetchHistoricalData(
@@ -837,7 +960,7 @@ export default {
       // DEBUG: 新股票初始资产
       console.log(`[新股票] initialAsset=${this.initialAssetThisStock} | stock=${this.currentStockInfo?.symbol} | period=${this.currentPeriod}`)
 
-      uni.hideLoading()
+      if (!silent) uni.hideLoading()
 
       this.$nextTick(() => {
         this.drawChart()
@@ -2270,5 +2393,333 @@ export default {
   color: rgba(255, 255, 255, 0.5);
   text-align: center;
   margin-top: 28rpx;
+}
+
+/* === 股票选择器浮层 === */
+.picker-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(120% 120% at 8% 0%, rgba(14, 14, 22, 1), rgba(8, 8, 14, 1) 55%, rgba(5, 5, 10, 1) 100%);
+  z-index: 800;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40rpx 0 40rpx;
+  overflow: hidden;
+  animation: picker-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 入场动画 */
+@keyframes picker-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 退出动画 */
+.picker-overlay.picker-closing {
+  animation: picker-exit 0.4s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes picker-exit {
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+/* 选中卡片放大动画 */
+.picker-closing .picker-card-active {
+  animation: picker-card-zoom 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes picker-card-zoom {
+  0% {
+    transform: rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(0deg) scale(1.35);
+    opacity: 0;
+  }
+}
+
+/* 退出时侧卡片淡出 */
+.picker-closing .picker-card-prev {
+  animation: picker-side-fade-prev 0.35s ease-out forwards;
+}
+.picker-closing .picker-card-next {
+  animation: picker-side-fade-next 0.35s ease-out forwards;
+}
+
+@keyframes picker-side-fade-prev {
+  to { opacity: 0; transform: rotate(-10deg) scale(0.7); }
+}
+@keyframes picker-side-fade-next {
+  to { opacity: 0; transform: rotate(10deg) scale(0.7); }
+}
+
+/* 动态背景光斑 — 模仿游戏主界面 bg-spot 的溢出渐变 */
+/* 主光斑：左上角，覆盖大面积 */
+.picker-spot-a {
+  position: absolute;
+  width: 1000rpx;
+  height: 1000rpx;
+  border-radius: 50%;
+  filter: blur(250rpx);
+  top: -300rpx;
+  left: -250rpx;
+  z-index: 0;
+  opacity: 0.75;
+  transition: background-color 0.5s ease;
+}
+
+/* 副光斑：右下角，补充环境光 */
+.picker-spot-b {
+  position: absolute;
+  width: 800rpx;
+  height: 800rpx;
+  border-radius: 50%;
+  filter: blur(220rpx);
+  bottom: -250rpx;
+  right: -200rpx;
+  z-index: 0;
+  opacity: 0.5;
+  transition: background-color 0.5s ease;
+}
+
+/* 各市场光斑颜色 — 与卡片边框/标签保持一致 */
+.picker-spot-a.picker-bg-us { background-color: rgba(40, 80, 200, 0.8); }
+.picker-spot-b.picker-bg-us { background-color: rgba(30, 60, 160, 0.6); }
+
+.picker-spot-a.picker-bg-cn_a { background-color: rgba(200, 50, 50, 0.8); }
+.picker-spot-b.picker-bg-cn_a { background-color: rgba(160, 30, 30, 0.6); }
+
+.picker-spot-a.picker-bg-hk { background-color: rgba(200, 120, 30, 0.8); }
+.picker-spot-b.picker-bg-hk { background-color: rgba(160, 90, 20, 0.6); }
+
+.picker-spot-a.picker-bg-crypto { background-color: rgba(130, 50, 200, 0.8); }
+.picker-spot-b.picker-bg-crypto { background-color: rgba(100, 35, 170, 0.6); }
+
+.picker-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  margin-bottom: 24rpx;
+}
+
+.picker-title {
+  font-size: 40rpx;
+  color: #f7fbff;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+}
+
+.picker-sub {
+  font-size: 24rpx;
+  color: rgba(180, 196, 228, 0.6);
+}
+
+.picker-swiper {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 740rpx;
+  overflow: visible;
+}
+
+/* 防止 swiper-item 裁剪卡片底边和阴影 */
+.picker-swiper swiper-item {
+  overflow: visible !important;
+}
+
+/* === 轮盘卡片 — 2D 倾斜（与交易滑动一致） === */
+.picker-card {
+  margin: 16rpx 8rpx 40rpx;
+  height: 620rpx;
+  border-radius: 28rpx;
+  background: radial-gradient(circle at 20% 10%, rgba(30, 42, 78, 0.95), rgba(12, 16, 32, 0.98));
+  border: 2rpx solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+  padding: 40rpx 32rpx;
+  /* 默认：缩小隐藏 */
+  transform: rotate(0deg) scale(0.75);
+  opacity: 0.2;
+  transform-origin: center bottom;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+              opacity 0.3s ease,
+              border-color 0.3s ease,
+              box-shadow 0.3s ease;
+}
+
+/* 左侧卡片 — 向左倾斜（逆时针） */
+.picker-card-prev {
+  transform: rotate(-6deg) scale(0.88);
+  transform-origin: center bottom;
+  opacity: 0.55;
+}
+
+/* 右侧卡片 — 向右倾斜（顺时针） */
+.picker-card-next {
+  transform: rotate(6deg) scale(0.88);
+  transform-origin: center bottom;
+  opacity: 0.55;
+}
+
+/* 中心卡片 — 正面居中 */
+.picker-card-active {
+  transform: rotate(0deg) scale(1);
+  opacity: 1;
+  border-color: rgba(75, 227, 164, 0.45);
+  box-shadow: 0 24rpx 72rpx rgba(75, 227, 164, 0.12),
+              0 16rpx 48rpx rgba(0, 0, 0, 0.5);
+}
+
+/* 按市场切换活跃卡片边框颜色 */
+.picker-card-active.card-us {
+  border-color: rgba(75, 130, 255, 0.5);
+  box-shadow: 0 24rpx 72rpx rgba(75, 130, 255, 0.12),
+              0 16rpx 48rpx rgba(0, 0, 0, 0.5);
+}
+
+.picker-card-active.card-cn_a {
+  border-color: rgba(255, 85, 85, 0.5);
+  box-shadow: 0 24rpx 72rpx rgba(255, 85, 85, 0.12),
+              0 16rpx 48rpx rgba(0, 0, 0, 0.5);
+}
+
+.picker-card-active.card-hk {
+  border-color: rgba(255, 170, 40, 0.5);
+  box-shadow: 0 24rpx 72rpx rgba(255, 170, 40, 0.12),
+              0 16rpx 48rpx rgba(0, 0, 0, 0.5);
+}
+
+.picker-card-active.card-crypto {
+  border-color: rgba(160, 100, 255, 0.5);
+  box-shadow: 0 24rpx 72rpx rgba(160, 100, 255, 0.12),
+              0 16rpx 48rpx rgba(0, 0, 0, 0.5);
+}
+
+.picker-card-market {
+  padding: 8rpx 24rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+}
+
+.market-us {
+  background: rgba(75, 130, 255, 0.2);
+  color: #4b82ff;
+  border: 1rpx solid rgba(75, 130, 255, 0.35);
+}
+
+.market-cn_a {
+  background: rgba(255, 85, 85, 0.2);
+  color: #ff5555;
+  border: 1rpx solid rgba(255, 85, 85, 0.35);
+}
+
+.market-hk {
+  background: rgba(255, 170, 40, 0.2);
+  color: #ffaa28;
+  border: 1rpx solid rgba(255, 170, 40, 0.35);
+}
+
+.market-crypto {
+  background: rgba(160, 100, 255, 0.2);
+  color: #a064ff;
+  border: 1rpx solid rgba(160, 100, 255, 0.35);
+}
+
+.picker-card-name {
+  font-size: 44rpx;
+  color: #f7fbff;
+  font-weight: 800;
+  letter-spacing: 2rpx;
+}
+
+.picker-card-symbol {
+  font-size: 28rpx;
+  color: rgba(180, 196, 228, 0.7);
+  font-weight: 500;
+  font-family: 'SF Mono', 'Menlo', monospace;
+}
+
+.picker-card-desc {
+  font-size: 24rpx;
+  color: rgba(180, 196, 228, 0.5);
+  text-align: center;
+  line-height: 1.5;
+  margin-top: 8rpx;
+}
+
+.picker-warning {
+  position: relative;
+  z-index: 1;
+  font-size: 22rpx;
+  color: rgba(255, 107, 107, 0.7);
+  margin-top: 24rpx;
+  margin-bottom: 32rpx;
+}
+
+.picker-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 24rpx;
+}
+
+.picker-btn-back {
+  padding: 20rpx 56rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1rpx solid rgba(255, 255, 255, 0.15);
+  transition: opacity 0.2s;
+}
+
+.picker-btn-back text {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+}
+
+.picker-btn-back:active {
+  opacity: 0.6;
+}
+
+.picker-btn-ai {
+  padding: 20rpx 56rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, rgba(255, 216, 111, 0.2), rgba(255, 180, 60, 0.15));
+  border: 1rpx solid rgba(255, 216, 111, 0.3);
+  transition: opacity 0.2s;
+}
+
+.picker-btn-ai text {
+  font-size: 28rpx;
+  color: #ffd86f;
+  font-weight: 600;
+}
+
+.picker-btn-ai:active {
+  opacity: 0.6;
 }
 </style>

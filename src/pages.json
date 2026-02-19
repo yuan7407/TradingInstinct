@@ -10,7 +10,8 @@
 	  {
 		"path": "pages/index/index",
 		"style": {
-		  "navigationBarTitleText": "盘感"
+		  "navigationBarTitleText": "盘感",
+		  "disableScroll": true
 		}
 	  },
 	  {
