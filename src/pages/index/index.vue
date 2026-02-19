@@ -116,7 +116,7 @@
     <!-- 滑动提示 - 时间周期下方 -->
     <view class="hint bottom">
       <text class="hint-left">← 卖出</text>
-      <text class="hint-mid">↑换股 ↓跳过</text>
+      <text class="hint-mid">↑换股 ↓跳过 捏合切周期</text>
       <text class="hint-right">买入 →</text>
     </view>
 
@@ -523,11 +523,22 @@ export default {
     // === 触摸事件（极端优化：只更新方向，不更新位置）===
     onTouchStart(e) {
       if (this.isProcessing) return
+
+      // 双指缩放检测
+      if (e.touches.length >= 2) {
+        this._isPinching = true
+        this._pinchStartDistance = this._getPinchDistance(e.touches)
+        this._pinchTriggered = false
+        this._isDragging = false // 禁用滑动
+        return
+      }
+
       const touch = e.touches[0]
       // 非响应式变量（不触发 setData）
       this._startX = touch.clientX
       this._startY = touch.clientY
       this._isDragging = true
+      this._isPinching = false
       this._swipeAxis = ''
       this._currentDeltaX = 0
       this._currentDeltaY = 0
@@ -540,6 +551,45 @@ export default {
     },
 
     onTouchMove(e) {
+      // 双指缩放处理
+      if (e.touches.length >= 2) {
+        // 中途第二根手指加入：从单指升级到双指
+        if (!this._isPinching) {
+          this._isPinching = true
+          this._pinchStartDistance = this._getPinchDistance(e.touches)
+          this._pinchTriggered = false
+          this._isDragging = false
+          this.swipeDirection = ''
+          this._baseDirection = ''
+          if (this._holdTimer) {
+            clearTimeout(this._holdTimer)
+            this._holdTimer = null
+          }
+        }
+
+        if (this._pinchTriggered) return // 已触发，等待 touchend
+
+        const currentDistance = this._getPinchDistance(e.touches)
+        const ratio = currentDistance / this._pinchStartDistance
+
+        if (ratio > 1.5) {
+          // 张开手指 → zoomIn（更细周期）
+          const newPeriod = this._getAdjacentPeriod('zoomIn')
+          if (newPeriod) {
+            this._pinchTriggered = true
+            this.switchPeriodView(newPeriod)
+          }
+        } else if (ratio < 0.67) {
+          // 合拢手指 → zoomOut（更粗周期）
+          const newPeriod = this._getAdjacentPeriod('zoomOut')
+          if (newPeriod) {
+            this._pinchTriggered = true
+            this.switchPeriodView(newPeriod)
+          }
+        }
+        return
+      }
+
       if (!this._isDragging || this.isProcessing) return
       const touch = e.touches[0]
       const deltaX = touch.clientX - this._startX
@@ -625,6 +675,14 @@ export default {
     },
 
     onTouchEnd() {
+      // 双指缩放结束
+      if (this._isPinching) {
+        this._isPinching = false
+        this._pinchStartDistance = 0
+        this._pinchTriggered = false
+        return
+      }
+
       if (!this._isDragging) return
       this._isDragging = false
 
@@ -806,7 +864,7 @@ export default {
     },
 
     handleBuy(currentPrice, multiplier = 1) {
-      if (this.totalAsset < 10) {
+      if (this.totalAsset < GAME_CONFIG.minAsset) {
         this.handleBankrupt()
         return
       }
@@ -817,8 +875,8 @@ export default {
         return
       }
 
-      const baseAmount = GAME_CONFIG.tradeAmount * multiplier
-      const tradeAmount = Math.min(baseAmount, this.totalAsset)
+      const riskPercent = GAME_CONFIG.tradeRiskPercent * multiplier // 0.10 or 0.20
+      const tradeAmount = Math.max(Math.round(this.totalAsset * riskPercent), 1)
       const sharesToBuy = tradeAmount / currentPrice
       const multiplierText = multiplier > 1 ? `${multiplier}X ` : ''
       const stockName = this.currentStockInfo?.name || '股票'
@@ -887,13 +945,13 @@ export default {
         ])
       } else if (this.currentHolding === 0) {
         // 开空仓
-        if (this.totalAsset < 100) {
+        if (this.totalAsset < GAME_CONFIG.minAsset) {
           this.handleBankrupt()
           return
         }
 
-        const baseAmount = GAME_CONFIG.tradeAmount * multiplier
-        const tradeAmount = Math.min(baseAmount, this.totalAsset)
+        const riskPercent = GAME_CONFIG.tradeRiskPercent * multiplier
+        const tradeAmount = Math.max(Math.round(this.totalAsset * riskPercent), 1)
         const sharesToShort = tradeAmount / currentPrice
         const multiplierText = multiplier > 1 ? `${multiplier}X ` : ''
 
@@ -918,13 +976,13 @@ export default {
         ])
       } else {
         // 加空 - 需要检查资金
-        if (this.totalAsset < 100) {
+        if (this.totalAsset < GAME_CONFIG.minAsset) {
           this.handleBankrupt()
           return
         }
 
-        const baseAmount = GAME_CONFIG.tradeAmount * multiplier
-        const tradeAmount = Math.min(baseAmount, this.totalAsset)
+        const riskPercent = GAME_CONFIG.tradeRiskPercent * multiplier
+        const tradeAmount = Math.max(Math.round(this.totalAsset * riskPercent), 1)
         const sharesToShort = tradeAmount / currentPrice
         const multiplierText = multiplier > 1 ? `${multiplier}X ` : ''
 
@@ -1122,9 +1180,9 @@ export default {
           let height = res[0].height
 
           if (width <= 300 || height <= 150) {
-            // 使用 CSS 中定义的尺寸：710rpx × 880rpx
+            // CSS 中宽度固定 710rpx，高度按比例估算
             width = Math.round(710 * rpxRatio)
-            height = Math.round(880 * rpxRatio)
+            height = Math.round(width * 1.24)
           }
 
           canvas.width = width * dpr
@@ -1235,52 +1293,104 @@ export default {
     async switchPeriod(periodKey) {
       if (periodKey === this.currentPeriod) return
       if (this.isProcessing) return
-
-      // 如果有进行中的游戏（有交易记录或有持仓），弹窗确认
-      if (this.decisions.length > 0 || this.currentHolding !== 0) {
-        uni.showModal({
-          title: '切换周期',
-          content: '切换周期将结束当前游戏，是否继续？',
-          confirmText: '确认切换',
-          cancelText: '取消',
-          success: (res) => {
-            if (res.confirm) {
-              this.doSwitchPeriod(periodKey)
-            }
-          }
-        })
-      } else {
-        this.doSwitchPeriod(periodKey)
-      }
+      await this.switchPeriodView(periodKey)
     },
 
-    async doSwitchPeriod(periodKey) {
+    // 无缝切换周期：保留同一只股票 + 持仓状态
+    async switchPeriodView(periodKey) {
+      if (periodKey === this.currentPeriod) return
       this.isProcessing = true
 
-      console.log(`[切换周期] ${this.currentPeriod} -> ${periodKey}`)
-
-      // 如果有持仓，先平仓
-      if (this.currentHolding !== 0) {
-        this.closePosition()
-      }
-
-      // 清除当前游戏状态
-      uni.removeStorageSync('gameState')
-      uni.setStorageSync('userAsset', this.totalAsset)
+      const oldPeriod = this.currentPeriod
+      console.log(`[切换周期] ${oldPeriod} -> ${periodKey}`)
 
       // 更新周期
       this.currentPeriod = periodKey
       uni.setStorageSync('preferredPeriod', periodKey)
 
-      // 清除 Canvas 缓存
+      // 如果没有当前股票（首次加载），fallback 到 loadNewStock
+      if (!this.currentStockInfo) {
+        await this.loadNewStock()
+        this.isProcessing = false
+        return
+      }
+
+      uni.showLoading({ title: '切换周期...' })
+
+      try {
+        const dateRange = calculateDateRange(periodKey)
+        const periodConfig = TIME_PERIODS[periodKey]
+
+        const data = await fetchHistoricalData(
+          this.currentStockInfo.symbol,
+          dateRange.startDate,
+          dateRange.endDate,
+          {
+            multiplier: dateRange.multiplier,
+            timespan: dateRange.timespan
+          }
+        )
+
+        if (data?.length) {
+          this.allKlineData = extractGameSegment(data)
+        } else {
+          this.allKlineData = generateMockData()
+        }
+
+        // 更新股票信息中的周期显示
+        this.currentStockInfo = {
+          ...this.currentStockInfo,
+          period: `${periodConfig.label} · ${dateRange.timespan}`
+        }
+      } catch (error) {
+        console.error('[Game] switchPeriodView error:', error)
+        this.allKlineData = generateMockData()
+        this.currentStockInfo = {
+          ...this.currentStockInfo,
+          period: `${TIME_PERIODS[periodKey]?.label || ''} · 模拟`
+        }
+      }
+
+      // 重置 K线 位置和决策记录（旧索引无效），但保留持仓和资产
+      this.currentIndex = 20
+      this.decisions = []
+      this.currentDecision = 0
+      this.aiSuggestion = ''
+
+      // 清除 Canvas 缓存，重新渲染
       this._cachedCanvas = null
       this._cachedCtx = null
       this._cachedDimensions = null
 
-      // 加载新周期的数据（相当于开始新游戏）
-      await this.loadNewStock()
+      uni.hideLoading()
+
+      // 振动反馈
+      uni.vibrateShort({ type: 'light' })
+
+      this.$nextTick(() => {
+        this.drawChart()
+      })
+
+      // 保存游戏状态
+      this.saveGameState()
 
       this.isProcessing = false
+    },
+
+    // === 双指缩放辅助 ===
+    _getPinchDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX
+      const dy = touches[0].clientY - touches[1].clientY
+      return Math.sqrt(dx * dx + dy * dy)
+    },
+
+    _getAdjacentPeriod(direction) {
+      const order = TIME_PERIOD_ORDER
+      const idx = order.indexOf(this.currentPeriod)
+      if (idx === -1) return null
+      if (direction === 'zoomIn' && idx > 0) return order[idx - 1]
+      if (direction === 'zoomOut' && idx < order.length - 1) return order[idx + 1]
+      return null
     },
 
     // === 功能按钮 ===
@@ -1320,15 +1430,15 @@ export default {
 
 <style>
 .container {
-  min-height: 100vh;
+  height: 100vh;
   background: radial-gradient(120% 120% at 8% 0%, rgba(27, 45, 64, 0.95), #0b0f1c 55%, #070a14 100%);
-  padding: 30rpx 28rpx 40rpx;
+  padding: 16rpx 28rpx 16rpx;
   box-sizing: border-box;
   position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 12rpx;
   transition: background 0.2s ease-out;
 }
 
@@ -1375,6 +1485,7 @@ export default {
   justify-content: space-between;
   gap: 16rpx;
   color: rgba(216, 222, 255, 0.92);
+  flex-shrink: 0;
 }
 
 .pill {
@@ -1422,7 +1533,8 @@ export default {
   justify-content: center;
   align-items: center;
   width: 100%;
-  min-height: 890rpx;
+  flex: 1;
+  min-height: 0;
   overflow: visible;
 }
 
@@ -1462,7 +1574,7 @@ export default {
   position: relative;
   z-index: 10;
   width: 710rpx;
-  height: 880rpx;
+  height: 100%;
   will-change: transform;
   transform-origin: center bottom;
   /* 回弹动画：弹性曲线，有轻微过冲感 */
@@ -1504,7 +1616,7 @@ export default {
 .chart-card {
   position: relative;
   width: 710rpx;
-  height: 880rpx;
+  height: 100%;
   border-radius: 28rpx;
   overflow: hidden;
   background: radial-gradient(circle at 20% 10%, rgba(30, 42, 78, 0.9), rgba(9, 12, 24, 0.98));
@@ -1514,8 +1626,8 @@ export default {
 
 .kline-canvas {
   display: block;
-  width: 710rpx;
-  height: 880rpx;
+  width: 100%;
+  height: 100%;
   border-radius: 26rpx;
 }
 
@@ -1651,14 +1763,15 @@ export default {
   background: rgba(12, 18, 32, 0.65);
   border: 1rpx solid rgba(255, 255, 255, 0.06);
   border-radius: 20rpx;
-  padding: 20rpx 24rpx;
+  padding: 14rpx 20rpx;
+  flex-shrink: 0;
 }
 
 .info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12rpx;
+  margin-bottom: 6rpx;
 }
 
 .info-row:last-child {
@@ -1728,9 +1841,10 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12rpx 16rpx;
+  padding: 8rpx 16rpx;
   color: rgba(180, 196, 228, 0.6);
   font-size: 22rpx;
+  flex-shrink: 0;
 }
 
 .hint.bottom {
@@ -1753,24 +1867,23 @@ export default {
   font-weight: 600;
 }
 
-/* 底部功能按钮 - PICNIC风格 */
+/* 底部功能按钮 - 放大版 */
 .action-bar {
   position: relative;
   z-index: 1;
   display: flex;
-  justify-content: center;
+  justify-content: space-around;
   align-items: center;
-  gap: 60rpx;
-  padding: 12rpx 0;
-  margin-top: auto;
+  padding: 12rpx 40rpx;
+  flex-shrink: 0;
 }
 
 .action-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4rpx;
-  padding: 8rpx 12rpx;
+  gap: 8rpx;
+  padding: 12rpx 24rpx;
   transition: opacity 0.2s;
 }
 
@@ -1779,8 +1892,9 @@ export default {
 }
 
 .action-text {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 18rpx;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 24rpx;
+  font-weight: 500;
   letter-spacing: 1rpx;
 }
 
@@ -1788,25 +1902,25 @@ export default {
 .icon-ranking {
   display: flex;
   align-items: flex-end;
-  gap: 4rpx;
-  height: 32rpx;
+  gap: 6rpx;
+  height: 48rpx;
 }
 
 .icon-ranking .bar {
-  width: 6rpx;
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 2rpx;
+  width: 10rpx;
+  background: rgba(255, 255, 255, 0.65);
+  border-radius: 3rpx;
 }
 
-.icon-ranking .bar-1 { height: 14rpx; }
-.icon-ranking .bar-2 { height: 22rpx; }
-.icon-ranking .bar-3 { height: 18rpx; }
+.icon-ranking .bar-1 { height: 22rpx; }
+.icon-ranking .bar-2 { height: 36rpx; }
+.icon-ranking .bar-3 { height: 28rpx; }
 
 /* 分享图标 - 向上箭头 */
 .icon-share {
   position: relative;
-  width: 24rpx;
-  height: 32rpx;
+  width: 36rpx;
+  height: 48rpx;
 }
 
 .icon-share .arrow {
@@ -1816,27 +1930,27 @@ export default {
   transform: translateX(-50%);
   width: 0;
   height: 0;
-  border-left: 8rpx solid transparent;
-  border-right: 8rpx solid transparent;
-  border-bottom: 10rpx solid rgba(255, 255, 255, 0.6);
+  border-left: 12rpx solid transparent;
+  border-right: 12rpx solid transparent;
+  border-bottom: 14rpx solid rgba(255, 255, 255, 0.65);
 }
 
 .icon-share .base {
   position: absolute;
-  top: 8rpx;
+  top: 12rpx;
   left: 50%;
   transform: translateX(-50%);
-  width: 4rpx;
-  height: 16rpx;
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 2rpx;
+  width: 6rpx;
+  height: 24rpx;
+  background: rgba(255, 255, 255, 0.65);
+  border-radius: 3rpx;
 }
 
 /* AI分析图标 - 脉冲线 */
 .icon-analysis {
   position: relative;
-  width: 28rpx;
-  height: 32rpx;
+  width: 44rpx;
+  height: 48rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1844,8 +1958,8 @@ export default {
 
 .icon-analysis .pulse {
   width: 100%;
-  height: 4rpx;
-  background: rgba(255, 255, 255, 0.6);
+  height: 5rpx;
+  background: rgba(255, 255, 255, 0.65);
   position: relative;
 }
 
@@ -1853,10 +1967,10 @@ export default {
   content: '';
   position: absolute;
   left: 25%;
-  top: -8rpx;
-  width: 4rpx;
-  height: 8rpx;
-  background: rgba(255, 255, 255, 0.6);
+  top: -12rpx;
+  width: 5rpx;
+  height: 12rpx;
+  background: rgba(255, 255, 255, 0.65);
   transform: rotate(-30deg);
 }
 
@@ -1864,10 +1978,10 @@ export default {
   content: '';
   position: absolute;
   left: 50%;
-  top: -12rpx;
-  width: 4rpx;
-  height: 16rpx;
-  background: rgba(255, 255, 255, 0.6);
+  top: -18rpx;
+  width: 5rpx;
+  height: 24rpx;
+  background: rgba(255, 255, 255, 0.65);
 }
 
 /* 2X 标签脉冲动画 */
@@ -1900,7 +2014,8 @@ export default {
   display: flex;
   justify-content: center;
   gap: 8rpx;
-  padding: 12rpx 0;
+  padding: 6rpx 0;
+  flex-shrink: 0;
 }
 
 .period-btn {

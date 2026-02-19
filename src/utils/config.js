@@ -33,8 +33,8 @@ export const API_CONFIG = {
 // 游戏配置
 export const GAME_CONFIG = {
   initialAsset: 10000,      // 初始金币
-  minAsset: 100,            // 最低金币阈值
-  tradeAmount: 1000,        // 每次交易金额
+  minAsset: 50,             // 最低金币阈值（破产线）
+  tradeRiskPercent: 0.10,   // 每次交易使用当前资产的 10%（2X=20%）
   klineLength: 1000,        // K线数据长度
   visibleKlines: 30,        // 可见K线数量
   priceRange: {
