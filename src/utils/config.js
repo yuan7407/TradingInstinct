@@ -35,6 +35,7 @@ export const GAME_CONFIG = {
   initialAsset: 10000,      // 初始金币
   minAsset: 50,             // 最低金币阈值（破产线）
   tradeRiskPercent: 0.10,   // 每次交易使用当前资产的 10%（2X=20%）
+  commissionRate: 0.001,    // 手续费 0.1%
   klineLength: 1000,        // K线数据长度
   visibleKlines: 30,        // 可见K线数量
   priceRange: {
@@ -43,92 +44,47 @@ export const GAME_CONFIG = {
   }
 }
 
+// 市场规则
+export const MARKET_RULES = {
+  us:     { canShort: true,  label: '美股' },
+  cn_a:   { canShort: false, label: 'A股' },
+  hk:     { canShort: false, label: '港股' },
+  crypto: { canShort: true,  label: '加密货币' }
+}
+
 // 预设关卡数据（股票信息）
+// market: 'us'=美股(可做空), 'cn_a'=A股(不可做空), 'hk'=港股(不可做空), 'crypto'=加密(可做空)
 export const PRESET_LEVELS = [
-  {
-    symbol: 'NVDA',
-    name: '英伟达',
-    period: '2023-01-01/2024-01-01',
-    description: 'AI芯片龙头的黄金时期'
-  },
-  {
-    symbol: 'AAPL',
-    name: '苹果',
-    period: '2022-06-01/2023-06-01',
-    description: '供应链恢复期'
-  },
-  {
-    symbol: 'TSLA',
-    name: '特斯拉',
-    period: '2021-01-01/2022-01-01',
-    description: '电动车泡沫高峰'
-  },
-  {
-    symbol: 'GME',
-    name: '游戏驿站',
-    period: '2020-12-01/2021-03-01',
-    description: '散户逼空事件'
-  },
-  {
-    symbol: 'BTC/USD',
-    name: '比特币',
-    period: '2020-10-01/2021-04-01',
-    description: '加密货币牛市'
-  },
-  {
-    symbol: 'MSFT',
-    name: '微软',
-    period: '2023-01-01/2024-01-01',
-    description: '云计算与AI商业化'
-  },
-  {
-    symbol: 'AMZN',
-    name: '亚马逊',
-    period: '2022-01-01/2023-01-01',
-    description: '电商降温与成本优化'
-  },
-  {
-    symbol: 'META',
-    name: 'Meta',
-    period: '2022-07-01/2023-07-01',
-    description: '降本增效与广告复苏'
-  },
-  {
-    symbol: 'GOOG',
-    name: '谷歌',
-    period: '2022-01-01/2023-01-01',
-    description: '广告周期回落'
-  },
-  {
-    symbol: 'NFLX',
-    name: '奈飞',
-    period: '2021-11-01/2022-11-01',
-    description: '增长放缓与订阅调整'
-  },
-  {
-    symbol: 'AMD',
-    name: 'AMD',
-    period: '2020-05-01/2021-05-01',
-    description: '芯片景气上行'
-  },
-  {
-    symbol: 'JPM',
-    name: '摩根大通',
-    period: '2022-01-01/2023-01-01',
-    description: '加息周期与银行板块波动'
-  },
-  {
-    symbol: 'XOM',
-    name: '埃克森美孚',
-    period: '2021-06-01/2022-06-01',
-    description: '能源价格高位运行'
-  },
-  {
-    symbol: 'DIS',
-    name: '迪士尼',
-    period: '2022-03-01/2023-03-01',
-    description: '流媒体转型压力'
-  }
+  // === 美股 ===
+  { symbol: 'NVDA',    name: '英伟达',     market: 'us', period: '2023-01-01/2024-01-01', description: 'AI芯片龙头的黄金时期' },
+  { symbol: 'AAPL',    name: '苹果',       market: 'us', period: '2022-06-01/2023-06-01', description: '供应链恢复期' },
+  { symbol: 'TSLA',    name: '特斯拉',     market: 'us', period: '2021-01-01/2022-01-01', description: '电动车泡沫高峰' },
+  { symbol: 'GME',     name: '游戏驿站',   market: 'us', period: '2020-12-01/2021-03-01', description: '散户逼空事件' },
+  { symbol: 'MSFT',    name: '微软',       market: 'us', period: '2023-01-01/2024-01-01', description: '云计算与AI商业化' },
+  { symbol: 'AMZN',    name: '亚马逊',     market: 'us', period: '2022-01-01/2023-01-01', description: '电商降温与成本优化' },
+  { symbol: 'META',    name: 'Meta',       market: 'us', period: '2022-07-01/2023-07-01', description: '降本增效与广告复苏' },
+  { symbol: 'GOOG',    name: '谷歌',       market: 'us', period: '2022-01-01/2023-01-01', description: '广告周期回落' },
+  { symbol: 'NFLX',    name: '奈飞',       market: 'us', period: '2021-11-01/2022-11-01', description: '增长放缓与订阅调整' },
+  { symbol: 'AMD',     name: 'AMD',        market: 'us', period: '2020-05-01/2021-05-01', description: '芯片景气上行' },
+  { symbol: 'JPM',     name: '摩根大通',   market: 'us', period: '2022-01-01/2023-01-01', description: '加息周期与银行板块波动' },
+  { symbol: 'XOM',     name: '埃克森美孚', market: 'us', period: '2021-06-01/2022-06-01', description: '能源价格高位运行' },
+  { symbol: 'DIS',     name: '迪士尼',     market: 'us', period: '2022-03-01/2023-03-01', description: '流媒体转型压力' },
+  // === 加密货币 ===
+  { symbol: 'BTC/USD', name: '比特币',     market: 'crypto', period: '2020-10-01/2021-04-01', description: '加密货币牛市' },
+  // === A股（不可做空）===
+  { symbol: '600519',  name: '贵州茅台',   market: 'cn_a', period: '2023-01-01/2024-01-01', description: '白酒龙头消费复苏' },
+  { symbol: '300750',  name: '宁德时代',   market: 'cn_a', period: '2022-01-01/2023-01-01', description: '动力电池行业领跑者' },
+  { symbol: '002594',  name: '比亚迪',     market: 'cn_a', period: '2023-06-01/2024-06-01', description: '新能源汽车销量爆发' },
+  { symbol: '601318',  name: '中国平安',   market: 'cn_a', period: '2022-01-01/2023-01-01', description: '保险行业龙头波动' },
+  { symbol: '000858',  name: '五粮液',     market: 'cn_a', period: '2021-01-01/2022-01-01', description: '高端白酒景气周期' },
+  { symbol: '600036',  name: '招商银行',   market: 'cn_a', period: '2023-01-01/2024-01-01', description: '零售银行利率调整' },
+  { symbol: '002049',  name: '紫光国微',   market: 'cn_a', period: '2022-06-01/2023-06-01', description: '芯片设计国产替代' },
+  // === 港股（不可做空）===
+  { symbol: '0700.HK', name: '腾讯控股',   market: 'hk', period: '2022-01-01/2023-01-01', description: '互联网监管后复苏' },
+  { symbol: '1810.HK', name: '小米集团',   market: 'hk', period: '2023-01-01/2024-01-01', description: '消费电子与造车新篇' },
+  { symbol: '3690.HK', name: '美团',       market: 'hk', period: '2022-06-01/2023-06-01', description: '本地生活竞争加剧' },
+  { symbol: '9988.HK', name: '阿里巴巴',   market: 'hk', period: '2022-01-01/2023-01-01', description: '电商格局重塑' },
+  { symbol: '9618.HK', name: '京东集团',   market: 'hk', period: '2022-06-01/2023-06-01', description: '电商物流一体化' }
 ]
 
 // 时间周期配置

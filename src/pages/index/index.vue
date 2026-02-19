@@ -197,7 +197,7 @@
 </template>
 
 <script>
-import { GAME_CONFIG, TIME_PERIODS, DEFAULT_TIME_PERIOD, TIME_PERIOD_ORDER } from '@/utils/config'
+import { GAME_CONFIG, MARKET_RULES, TIME_PERIODS, DEFAULT_TIME_PERIOD, TIME_PERIOD_ORDER } from '@/utils/config'
 import { generateMockData, extractGameSegment, getRandomStockInfo, fetchHistoricalData, calculateDateRange } from '@/utils/stockData'
 import { getQuickAISuggestion } from '@/utils/aiAnalysis'
 
@@ -263,8 +263,10 @@ export default {
     },
     stockMetaDisplay() {
       const symbol = this.currentStockInfo?.symbol || 'RND'
+      const market = this.currentStockInfo?.market || 'us'
+      const marketLabel = MARKET_RULES[market]?.label || ''
       const period = this.currentStockInfo?.period || '历史片段'
-      return `${symbol} · ${period}`
+      return `${symbol} · ${marketLabel} · ${period}`
     },
     roundLabel() {
       return `第 ${this.currentDecision} 轮`
@@ -306,9 +308,9 @@ export default {
     },
     positionText() {
       if (this.currentHolding > 0) {
-        return `多仓 ${this.currentHolding.toFixed(2)} 股`
+        return `多仓 ${this.currentHolding} 股`
       } else if (this.currentHolding < 0) {
-        return `空仓 ${Math.abs(this.currentHolding).toFixed(2)} 股`
+        return `做空 ${Math.abs(this.currentHolding)} 股`
       }
       return '无持仓'
     },
@@ -749,16 +751,19 @@ export default {
 
       if (this.currentHolding > 0) {
         // 平多仓
-        const sellAmount = this.currentHolding * currentPrice
-        const profit = (currentPrice - this.avgBuyPrice) * this.currentHolding
-        this.totalAsset += sellAmount
-        uni.showToast({ title: `平仓 ${profit >= 0 ? '盈利' : '亏损'} ${Math.abs(profit).toFixed(0)}`, icon: 'none', duration: 800 })
+        const sellAmount = Math.round(this.currentHolding * currentPrice)
+        const commission = Math.max(1, Math.round(sellAmount * GAME_CONFIG.commissionRate))
+        const profit = Math.round((currentPrice - this.avgBuyPrice) * this.currentHolding)
+        this.totalAsset += (sellAmount - commission)
+        uni.showToast({ title: `平仓 ${profit >= 0 ? '盈利' : '亏损'} ${Math.abs(profit)}`, icon: 'none', duration: 800 })
       } else {
         // 平空仓：买回股票 + 解冻卖出收入 + 退回保证金
         const shares = Math.abs(this.currentHolding)
-        const profit = (this.avgBuyPrice - currentPrice) * shares
-        this.totalAsset = this.totalAsset - currentPrice * shares + 2 * this.avgBuyPrice * shares
-        uni.showToast({ title: `平空 ${profit >= 0 ? '盈利' : '亏损'} ${Math.abs(profit).toFixed(0)}`, icon: 'none', duration: 800 })
+        const buybackCost = Math.round(currentPrice * shares)
+        const commission = Math.max(1, Math.round(buybackCost * GAME_CONFIG.commissionRate))
+        const profit = Math.round((this.avgBuyPrice - currentPrice) * shares)
+        this.totalAsset = this.totalAsset - buybackCost + 2 * this.avgBuyPrice * shares - commission
+        uni.showToast({ title: `平空 ${profit >= 0 ? '盈利' : '亏损'} ${Math.abs(profit)}`, icon: 'none', duration: 800 })
       }
 
       this.currentHolding = 0
@@ -798,6 +803,7 @@ export default {
           this.currentStockInfo = {
             symbol: stockInfo.symbol,
             name: stockInfo.name,
+            market: stockInfo.market || 'us',
             period: `${periodConfig.label} · ${dateRange.timespan}`,
             description: stockInfo.description
           }
@@ -875,16 +881,18 @@ export default {
         return
       }
 
-      const riskPercent = GAME_CONFIG.tradeRiskPercent * multiplier // 0.10 or 0.20
-      const tradeAmount = Math.max(Math.round(this.totalAsset * riskPercent), 1)
-      const sharesToBuy = tradeAmount / currentPrice
+      const riskPercent = GAME_CONFIG.tradeRiskPercent * multiplier
+      const budget = Math.round(this.totalAsset * riskPercent)
+      const sharesToBuy = Math.max(1, Math.floor(budget / currentPrice))
+      const tradeAmount = Math.round(sharesToBuy * currentPrice)
+      const commission = Math.max(1, Math.round(tradeAmount * GAME_CONFIG.commissionRate))
       const multiplierText = multiplier > 1 ? `${multiplier}X ` : ''
       const stockName = this.currentStockInfo?.name || '股票'
       const isAddPosition = this.currentHolding > 0
 
       if (isAddPosition) {
-        // 加仓
-        const totalCost = (this.avgBuyPrice * this.currentHolding) + tradeAmount
+        // 加仓：加权平均成本
+        const totalCost = this.avgBuyPrice * this.currentHolding + currentPrice * sharesToBuy
         this.currentHolding += sharesToBuy
         this.avgBuyPrice = totalCost / this.currentHolding
       } else {
@@ -893,7 +901,7 @@ export default {
         this.avgBuyPrice = currentPrice
       }
 
-      this.totalAsset -= tradeAmount
+      this.totalAsset -= (tradeAmount + commission)
       this.decisions.push({
         type: 'buy',
         price: currentPrice,
@@ -906,9 +914,9 @@ export default {
       // 显示交易弹窗
       const title = isAddPosition ? `${multiplierText}加仓成功` : `${multiplierText}买入成功`
       this.showTradePopup(title, [
-        `${stockName} ${sharesToBuy.toFixed(2)} 股`,
-        `花费 ${tradeAmount.toFixed(0)} 金币`,
-        `当前持仓 ${this.currentHolding.toFixed(2)} 股`
+        `${stockName} ${sharesToBuy} 股`,
+        `花费 ${tradeAmount} + 手续费 ${commission}`,
+        `当前持仓 ${this.currentHolding} 股`
       ])
 
       this.advanceChart()
@@ -920,10 +928,11 @@ export default {
       if (this.currentHolding > 0) {
         // 平多仓
         const soldShares = this.currentHolding
-        const sellAmount = soldShares * currentPrice
-        const profit = (currentPrice - this.avgBuyPrice) * soldShares
+        const sellAmount = Math.round(soldShares * currentPrice)
+        const commission = Math.max(1, Math.round(sellAmount * GAME_CONFIG.commissionRate))
+        const profit = Math.round((currentPrice - this.avgBuyPrice) * soldShares)
 
-        this.totalAsset += sellAmount
+        this.totalAsset += (sellAmount - commission)
         this.decisions.push({
           type: 'sell',
           price: currentPrice,
@@ -937,27 +946,37 @@ export default {
         this.avgBuyPrice = 0
 
         // 显示交易弹窗
-        const profitText = profit >= 0 ? `盈利 ${profit.toFixed(0)} 金币` : `亏损 ${Math.abs(profit).toFixed(0)} 金币`
+        const profitText = profit >= 0 ? `盈利 ${profit} 金币` : `亏损 ${Math.abs(profit)} 金币`
         this.showTradePopup('卖出平仓', [
-          `${stockName} ${soldShares.toFixed(2)} 股`,
-          profitText,
+          `${stockName} ${soldShares} 股`,
+          `${profitText}（手续费 ${commission}）`,
           '当前无持仓'
         ])
       } else if (this.currentHolding === 0) {
-        // 开空仓
+        // 开空仓 - 检查市场是否允许做空
+        const market = this.currentStockInfo?.market || 'us'
+        if (!MARKET_RULES[market]?.canShort) {
+          const marketLabel = MARKET_RULES[market]?.label || market
+          uni.showToast({ title: `${marketLabel}不支持做空`, icon: 'none', duration: 1500 })
+          this.isProcessing = false
+          return
+        }
+
         if (this.totalAsset < GAME_CONFIG.minAsset) {
           this.handleBankrupt()
           return
         }
 
         const riskPercent = GAME_CONFIG.tradeRiskPercent * multiplier
-        const tradeAmount = Math.max(Math.round(this.totalAsset * riskPercent), 1)
-        const sharesToShort = tradeAmount / currentPrice
+        const budget = Math.round(this.totalAsset * riskPercent)
+        const sharesToShort = Math.max(1, Math.floor(budget / currentPrice))
+        const tradeAmount = Math.round(sharesToShort * currentPrice)
+        const commission = Math.max(1, Math.round(tradeAmount * GAME_CONFIG.commissionRate))
         const multiplierText = multiplier > 1 ? `${multiplier}X ` : ''
 
         this.currentHolding = -sharesToShort
         this.avgBuyPrice = currentPrice
-        this.totalAsset -= tradeAmount
+        this.totalAsset -= (tradeAmount + commission)
 
         this.decisions.push({
           type: 'short',
@@ -970,9 +989,9 @@ export default {
 
         // 显示交易弹窗
         this.showTradePopup(`${multiplierText}做空成功`, [
-          `${stockName} ${sharesToShort.toFixed(2)} 股`,
-          `保证金 ${tradeAmount.toFixed(0)} 金币`,
-          `当前空仓 ${Math.abs(this.currentHolding).toFixed(2)} 股`
+          `${stockName} ${sharesToShort} 股`,
+          `保证金 ${tradeAmount} + 手续费 ${commission}`,
+          `做空 ${Math.abs(this.currentHolding)} 股`
         ])
       } else {
         // 加空 - 需要检查资金
@@ -982,14 +1001,17 @@ export default {
         }
 
         const riskPercent = GAME_CONFIG.tradeRiskPercent * multiplier
-        const tradeAmount = Math.max(Math.round(this.totalAsset * riskPercent), 1)
-        const sharesToShort = tradeAmount / currentPrice
+        const budget = Math.round(this.totalAsset * riskPercent)
+        const sharesToShort = Math.max(1, Math.floor(budget / currentPrice))
+        const tradeAmount = Math.round(sharesToShort * currentPrice)
+        const commission = Math.max(1, Math.round(tradeAmount * GAME_CONFIG.commissionRate))
         const multiplierText = multiplier > 1 ? `${multiplier}X ` : ''
 
-        const totalCost = (this.avgBuyPrice * Math.abs(this.currentHolding)) + tradeAmount
+        // 加权平均做空价格
+        const totalSellValue = this.avgBuyPrice * Math.abs(this.currentHolding) + currentPrice * sharesToShort
         this.currentHolding -= sharesToShort
-        this.avgBuyPrice = totalCost / Math.abs(this.currentHolding)
-        this.totalAsset -= tradeAmount
+        this.avgBuyPrice = totalSellValue / Math.abs(this.currentHolding)
+        this.totalAsset -= (tradeAmount + commission)
 
         this.decisions.push({
           type: 'short',
@@ -1002,9 +1024,9 @@ export default {
 
         // 显示交易弹窗
         this.showTradePopup(`${multiplierText}加空成功`, [
-          `${stockName} ${sharesToShort.toFixed(2)} 股`,
-          `保证金 ${tradeAmount.toFixed(0)} 金币`,
-          `当前空仓 ${Math.abs(this.currentHolding).toFixed(2)} 股`
+          `${stockName} ${sharesToShort} 股`,
+          `保证金 ${tradeAmount} + 手续费 ${commission}`,
+          `做空 ${Math.abs(this.currentHolding)} 股`
         ])
       }
 
@@ -1014,10 +1036,12 @@ export default {
     coverShort(currentPrice) {
       const stockName = this.currentStockInfo?.name || '股票'
       const shares = Math.abs(this.currentHolding)
-      const profit = (this.avgBuyPrice - currentPrice) * shares
+      const buybackCost = Math.round(currentPrice * shares)
+      const commission = Math.max(1, Math.round(buybackCost * GAME_CONFIG.commissionRate))
+      const profit = Math.round((this.avgBuyPrice - currentPrice) * shares)
 
-      // 平空：买回股票 + 解冻卖出收入 + 退回保证金
-      this.totalAsset = this.totalAsset - currentPrice * shares + 2 * this.avgBuyPrice * shares
+      // 平空：买回股票 + 解冻卖出收入 + 退回保证金 - 手续费
+      this.totalAsset = this.totalAsset - buybackCost + 2 * this.avgBuyPrice * shares - commission
 
       this.decisions.push({
         type: 'cover',
@@ -1031,10 +1055,10 @@ export default {
       this.avgBuyPrice = 0
 
       // 显示交易弹窗
-      const profitText = profit >= 0 ? `盈利 ${profit.toFixed(0)} 金币` : `亏损 ${Math.abs(profit).toFixed(0)} 金币`
+      const profitText = profit >= 0 ? `盈利 ${profit} 金币` : `亏损 ${Math.abs(profit)} 金币`
       this.showTradePopup('平空成功', [
-        `${stockName} ${shares.toFixed(2)} 股`,
-        profitText,
+        `${stockName} ${shares} 股`,
+        `${profitText}（手续费 ${commission}）`,
         '当前无持仓'
       ])
 
