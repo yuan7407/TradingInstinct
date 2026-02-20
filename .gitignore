@@ -25,3 +25,13 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw*
+
+# Claude Code（私有配置，不入库）
+.claude/
+
+# 腾讯云开发
+.cloudbase/
+
+# 大型媒体文件
+*.mp4
+*.webm

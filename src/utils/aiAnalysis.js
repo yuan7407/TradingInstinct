@@ -143,31 +143,36 @@ async function analyzeWithDeepSeek(decisions, klineData, stats, stockInfo) {
 请分析我的交易表现并给出建议。`
 
   try {
-    const response = await uni.request({
-      url: endpoint,
-      method: 'POST',
-      timeout: timeout,
-      header: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      data: {
-        model: model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
-        ],
-        temperature: 0.7,
-        max_tokens: 300,
-        stream: false
-      }
+    // 使用 callback 转 Promise，避免 uni.request 返回值在小程序运行时不可解构
+    const res = await new Promise((resolve, reject) => {
+      uni.request({
+        url: endpoint,
+        method: 'POST',
+        timeout: timeout,
+        header: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        data: {
+          model: model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage }
+          ],
+          temperature: 0.7,
+          max_tokens: 300,
+          stream: false
+        },
+        success: (response) => resolve(response),
+        fail: (err) => reject(err)
+      })
     })
 
-    if (response?.data?.choices?.[0]) {
+    if (res?.data?.choices?.[0]) {
       return {
         provider: 'DeepSeek分析',
         icon: '',
-        content: response.data.choices[0].message.content
+        content: res.data.choices[0].message.content
       }
     }
 

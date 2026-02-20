@@ -53,8 +53,13 @@
 ### 3个工具模块
 
 1. **config.js** (`src/utils/config.js`) - 统一配置（API 端点/游戏参数/UI 颜色/时间周期/预设关卡）
-2. **stockData.js** (`src/utils/stockData.js`) - K线数据获取、归一化、缓存、Mock 降级
+2. **stockData.js** (`src/utils/stockData.js`) - K线数据获取（美股Massive + A股港股东方财富自动路由）、归一化、缓存、Mock 降级
 3. **aiAnalysis.js** (`src/utils/aiAnalysis.js`) - 双层 AI 分析（快速本地规则 + DeepSeek 深度分析）
+
+### 双模式系统
+
+- **新手模式 (beginner)**: 面积线图 + 归一化数据 + 整数股（默认）
+- **真实模式 (real)**: 蜡烛图 + 真实价格 + 周期缓存 + 整数股
 
 ### 核心交互
 
@@ -66,14 +71,14 @@
 
 ### 6个时间周期
 
-| 周期 | K线间隔 | 时间跨度 | 最大数据点 |
-|------|---------|----------|-----------|
-| 1D | 5分钟 | 1天 | 78 |
-| 1W | 30分钟 | 7天 | 140 |
-| 1M | 1小时 | 1个月 | 180 |
-| 3M | 1天 | 3个月 | 65 |
-| 1Y | 1天 | 1年 | 252 |
-| ALL | 1周 | 5年 | 260 |
+| 周期 | K线间隔 | 请求范围 | 最大数据点 | 定位 |
+|------|---------|----------|-----------|------|
+| 1H | 1分钟 | 7天 | 60 | 超短线 |
+| 1D | 5分钟 | 3天 | 78 | 日内交易 |
+| 1W | 30分钟 | 21天 | 140 | 短线波段 |
+| 1M | 1小时 | 3个月 | 180 | 波段交易 |
+| 1Y | 日K | 1年 | 252 | 长期投资 |
+| ALL | 周K | 5年 | 260 | 历史全貌 |
 
 ### 隔离原则
 
@@ -92,12 +97,21 @@
 - **后端**: Michael 负责实现，但我们负责设计所有 API 细节
 - **API 规格文档**: `260129_盘感后端API技术规格文档_Michael.md`（项目根目录）
 
+### 数据源
+
+| 市场 | 数据源 | 说明 |
+|------|--------|------|
+| 美股/加密 | Massive (Polygon) API | 需要 API Key |
+| A股/港股 | 东方财富 HTTP API | 免费，无需 Key，`push2his.eastmoney.com` |
+
+`fetchHistoricalData()` 根据 symbol 自动路由到对应数据源，调用方无感知。
+
 ### 后端技术栈（规划）
 
 - 服务器: 腾讯云 121.5.173.241
 - 框架: Python FastAPI（建议）
 - 数据库: MySQL（5张表: users, game_sessions, game_trades, kline_cache, user_friends）
-- 外部 API: Twelve Data（K线）、DeepSeek（AI 分析）
+- 外部 API: DeepSeek（AI 分析）
 - 认证: JWT（7天有效期）
 
 ---

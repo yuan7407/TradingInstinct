@@ -1,7 +1,7 @@
 <template>
   <view class="container" :class="bgClass">
-    <view class="bg-spot spot-a"></view>
-    <view class="bg-spot spot-b"></view>
+    <view class="bg-spot spot-a" :style="spotAStyle"></view>
+    <view class="bg-spot spot-b" :style="spotBStyle"></view>
 
     <!-- 顶部栏 -->
     <view class="top-bar">
@@ -122,6 +122,18 @@
 
     <!-- 底部功能按钮 - PICNIC风格小图标 -->
     <view class="action-bar">
+      <view class="action-btn" @tap="toggleGameMode">
+        <view class="mode-icon" :class="gameMode === 'beginner' ? 'mode-beginner' : 'mode-real'">
+          <view v-if="gameMode === 'beginner'" class="mode-wave">
+            <view class="wave-line"></view>
+          </view>
+          <view v-else class="mode-candle">
+            <view class="candle-wick"></view>
+            <view class="candle-body"></view>
+          </view>
+        </view>
+        <text class="action-text">{{ gameMode === 'beginner' ? '新手' : '真实' }}</text>
+      </view>
       <view class="action-btn" @tap="goToRanking">
         <view class="icon-ranking">
           <view class="bar bar-1"></view>
@@ -197,8 +209,8 @@
     <!-- 股票选择器浮层 -->
     <view class="picker-overlay" v-if="showStockPicker"
       :class="{ 'picker-closing': pickerClosing }">
-      <view class="picker-spot-a" :class="pickerBgClass"></view>
-      <view class="picker-spot-b" :class="pickerBgClass"></view>
+      <view class="picker-spot-a" :class="pickerBgClass" :style="pickerSpotAStyle"></view>
+      <view class="picker-spot-b" :class="pickerBgClass" :style="pickerSpotBStyle"></view>
 
       <view class="picker-header">
         <text class="picker-title">选择股票</text>
@@ -216,6 +228,7 @@
             <view class="picker-card-market" :class="'market-' + stock.market">
               {{ getPickerMarketLabel(stock.market) }}
             </view>
+            <view v-if="stock.dataSource === 'none'" class="picker-card-mock-badge">模拟</view>
             <text class="picker-card-name">{{ stock.name }}</text>
             <text class="picker-card-symbol">{{ stock.symbol }}</text>
             <text class="picker-card-desc">{{ stock.description }}</text>
@@ -239,12 +252,15 @@
 
 <script>
 import { GAME_CONFIG, MARKET_RULES, TIME_PERIODS, DEFAULT_TIME_PERIOD, TIME_PERIOD_ORDER, PRESET_LEVELS } from '@/utils/config'
-import { generateMockData, extractGameSegment, getRandomStockInfo, fetchHistoricalData, calculateDateRange } from '@/utils/stockData'
+import { generateMockData, extractGameSegment, prepareGameData, getRandomStockInfo, fetchHistoricalData, calculateDateRange } from '@/utils/stockData'
 import { getQuickAISuggestion } from '@/utils/aiAnalysis'
 
 export default {
   data() {
     return {
+      // 游戏模式
+      gameMode: uni.getStorageSync('gameMode') || 'beginner',  // 'beginner' | 'real'
+
       // 游戏状态
       isInitialized: false,
       isProcessing: false,
@@ -272,7 +288,7 @@ export default {
       swipeDirection: '', // 'buy' | 'sell' | 'next' | 'buy2x' | 'sell2x' | ''
 
       // 时间周期
-      currentPeriod: uni.getStorageSync('preferredPeriod') || DEFAULT_TIME_PERIOD,
+      currentPeriod: TIME_PERIODS[uni.getStorageSync('preferredPeriod')] ? uni.getStorageSync('preferredPeriod') : DEFAULT_TIME_PERIOD,
       timePeriodOrder: TIME_PERIOD_ORDER,
 
       // Canvas 缓存（避免重复查询）
@@ -300,7 +316,13 @@ export default {
       showStockPicker: false,
       pickerIndex: 0,
       pickerStocks: [],
-      pickerClosing: false
+      pickerClosing: false,
+
+      // 光斑动态位置
+      spotAStyle: '',
+      spotBStyle: '',
+      pickerSpotAStyle: '',
+      pickerSpotBStyle: ''
     }
   },
 
@@ -418,6 +440,8 @@ export default {
   },
 
   onReady() {
+    this._randomizeSpots()
+    this._periodCache = {}
     if (!this.isInitialized) {
       this.isInitialized = true
       this.checkCoinRewardsAndStart()
@@ -429,10 +453,36 @@ export default {
   },
 
   onUnload() {
+    this._cancelAllAnimations()
     this.isInitialized = false
   },
 
   methods: {
+    // === 光斑位置随机化 ===
+    _randomizeSpots() {
+      // 主光斑：随机散布在屏幕各处（rpx 坐标）
+      const aTop = Math.floor(Math.random() * 800 - 300)   // -300 ~ 500
+      const aLeft = Math.floor(Math.random() * 700 - 300)  // -300 ~ 400
+      const bTop = Math.floor(Math.random() * 800 + 100)   // 100 ~ 900
+      const bLeft = Math.floor(Math.random() * 700 - 100)  // -100 ~ 600
+      // 随机动画延迟，让两个光斑不同步浮动
+      const delayA = (Math.random() * 4).toFixed(1)
+      const delayB = (Math.random() * 4).toFixed(1)
+      this.spotAStyle = `top:${aTop}rpx;left:${aLeft}rpx;animation-delay:-${delayA}s`
+      this.spotBStyle = `top:${bTop}rpx;left:${bLeft}rpx;animation-delay:-${delayB}s`
+    },
+
+    _randomizePickerSpots() {
+      const aTop = Math.floor(Math.random() * 600 - 400)   // -400 ~ 200
+      const aLeft = Math.floor(Math.random() * 600 - 350)  // -350 ~ 250
+      const bTop = Math.floor(Math.random() * 600 + 400)   // 400 ~ 1000
+      const bLeft = Math.floor(Math.random() * 600 - 100)  // -100 ~ 500
+      const delayA = (Math.random() * 5).toFixed(1)
+      const delayB = (Math.random() * 5).toFixed(1)
+      this.pickerSpotAStyle = `top:${aTop}rpx;left:${aLeft}rpx;animation-delay:-${delayA}s`
+      this.pickerSpotBStyle = `top:${bTop}rpx;left:${bLeft}rpx;animation-delay:-${delayB}s`
+    },
+
     // === 金币奖励检查 ===
     checkCoinRewardsAndStart() {
       const isNewUser = !uni.getStorageSync('hasReceivedInitialCoins')
@@ -498,7 +548,7 @@ export default {
       if (this._tradePopupTimer) clearTimeout(this._tradePopupTimer)
       this._tradePopupTimer = setTimeout(() => {
         this.tradePopup.show = false
-      }, 4000)
+      }, 1500)
     },
 
     dismissTradePopup() {
@@ -561,8 +611,17 @@ export default {
       this.decisions = state.decisions
       this.aiSuggestion = state.aiSuggestion
 
+      // 恢复模式和周期状态
+      if (state.gameMode) {
+        this.gameMode = state.gameMode
+      }
+      if (state.currentPeriod && TIME_PERIODS[state.currentPeriod]) {
+        this.currentPeriod = state.currentPeriod
+      }
+      this._periodCache = state.periodCache || {}
+
       // DEBUG: 恢复状态
-      console.log(`[恢复游戏] initialAsset=${this.initialAssetThisStock} | totalAsset=${this.totalAsset} | holding=${this.currentHolding} | avgBuyPrice=${this.avgBuyPrice}`)
+      console.log(`[恢复游戏] initialAsset=${this.initialAssetThisStock} | totalAsset=${this.totalAsset} | holding=${this.currentHolding} | avgBuyPrice=${this.avgBuyPrice} | mode=${this.gameMode}`)
 
       this.$nextTick(() => {
         this.drawChart()
@@ -581,6 +640,9 @@ export default {
         initialAssetThisStock: this.initialAssetThisStock,
         decisions: this.decisions,
         aiSuggestion: this.aiSuggestion,
+        gameMode: this.gameMode,
+        currentPeriod: this.currentPeriod,
+        periodCache: this._periodCache || {},
         savedAt: Date.now()
       }
       uni.setStorageSync('gameState', JSON.stringify(state))
@@ -588,6 +650,18 @@ export default {
 
     // === 触摸事件（极端优化：只更新方向，不更新位置）===
     onTouchStart(e) {
+      // 打断动画
+      if (this._isAnimating || this._flickerFrameId) {
+        this._cancelAllAnimations()
+        if (this._cachedCanvas && this._cachedCtx && this._cachedDimensions) {
+          if (this.gameMode === 'beginner') {
+            this._renderLineChart(this._cachedCanvas, this._cachedCtx, this._cachedDimensions)
+          } else {
+            this._renderKlines(this._cachedCanvas, this._cachedCtx, this._cachedDimensions)
+          }
+        }
+      }
+
       if (this.isProcessing) return
 
       // 双指缩放检测
@@ -807,6 +881,7 @@ export default {
       this.pickerIndex = 0
       this.pickerClosing = false
       this.showStockPicker = true
+      this._randomizePickerSpots()
     },
 
     closeStockPicker() {
@@ -821,6 +896,7 @@ export default {
 
     onPickerChange(e) {
       this.pickerIndex = e.detail.current
+      this._randomizePickerSpots()
     },
 
     onPickerCardTap(idx) {
@@ -895,22 +971,21 @@ export default {
     // 加载新股票（可传入指定股票，silent=true 时不显示 loading）
     async loadNewStock(specificStock = null, options = {}) {
       const { silent = false } = options
-      // 清除 Canvas 缓存（切换股票时需要重新初始化）
-      this._cachedCanvas = null
-      this._cachedCtx = null
-      this._cachedDimensions = null
+      // 停止动画，清除周期缓存（换股时所有缓存失效）
+      this._cancelAllAnimations()
+      this._periodCache = {}
 
       if (!silent) uni.showLoading({ title: '加载中...' })
+
+      // 使用指定股票或随机选择
+      const stockInfo = specificStock || getRandomStockInfo()
 
       try {
         // 获取当前时间周期配置
         const dateRange = calculateDateRange(this.currentPeriod)
         const periodConfig = TIME_PERIODS[this.currentPeriod]
 
-        // 使用指定股票或随机选择
-        const stockInfo = specificStock || getRandomStockInfo()
-
-        // 使用时间周期参数获取数据
+        // 统一走 API 流程（fetchHistoricalData 自动路由到对应数据源）
         const data = await fetchHistoricalData(
           stockInfo.symbol,
           dateRange.startDate,
@@ -922,17 +997,26 @@ export default {
         )
 
         if (data?.length) {
-          this.allKlineData = extractGameSegment(data)
+          if (this.gameMode === 'beginner') {
+            // 新手模式：归一化 + 随机选段
+            this.allKlineData = extractGameSegment(data)
+          } else {
+            // 真实模式：保留真实价格
+            const prepared = prepareGameData(data)
+            this.allKlineData = (prepared && prepared.length > 20)
+              ? prepared
+              : generateMockData(300)
+          }
           this.currentStockInfo = {
             symbol: stockInfo.symbol,
             name: stockInfo.name,
             market: stockInfo.market || 'us',
-            period: `${periodConfig.label} · ${dateRange.timespan}`,
+            period: `${periodConfig.label} · ${periodConfig.description}`,
             description: stockInfo.description
           }
         } else {
           // API 无数据时使用 mock
-          this.allKlineData = generateMockData()
+          this.allKlineData = generateMockData(this.gameMode === 'beginner' ? 1000 : 300)
           this.currentStockInfo = {
             ...stockInfo,
             period: `${periodConfig.label} · 模拟`
@@ -940,8 +1024,7 @@ export default {
         }
       } catch (error) {
         console.error('[Game] loadNewStock error:', error)
-        this.allKlineData = generateMockData()
-        const stockInfo = getRandomStockInfo()
+        this.allKlineData = generateMockData(this.gameMode === 'beginner' ? 1000 : 300)
         this.currentStockInfo = {
           ...stockInfo,
           period: `${TIME_PERIODS[this.currentPeriod]?.label || ''} · 模拟`
@@ -963,7 +1046,7 @@ export default {
       if (!silent) uni.hideLoading()
 
       this.$nextTick(() => {
-        this.drawChart()
+        this.drawChart({ animate: true })
         this.showGuideIfFirstTime()
       })
     },
@@ -992,6 +1075,11 @@ export default {
       }
     },
 
+    // 格式化股数显示（统一整数）
+    _formatShares(n) {
+      return String(n)
+    },
+
     handleBuy(currentPrice, multiplier = 1) {
       if (this.totalAsset < GAME_CONFIG.minAsset) {
         this.handleBankrupt()
@@ -1006,6 +1094,7 @@ export default {
 
       const riskPercent = GAME_CONFIG.tradeRiskPercent * multiplier
       const budget = Math.round(this.totalAsset * riskPercent)
+      // 真实模式：小数股；新手模式：整数股
       const sharesToBuy = Math.max(1, Math.floor(budget / currentPrice))
       const tradeAmount = Math.round(sharesToBuy * currentPrice)
       const commission = Math.max(1, Math.round(tradeAmount * GAME_CONFIG.commissionRate))
@@ -1035,11 +1124,13 @@ export default {
       })
 
       // 显示交易弹窗
+      const sharesDisplay = this._formatShares(sharesToBuy)
+      const holdingDisplay = this._formatShares(this.currentHolding)
       const title = isAddPosition ? `${multiplierText}加仓成功` : `${multiplierText}买入成功`
       this.showTradePopup(title, [
-        `${stockName} ${sharesToBuy} 股`,
+        `${stockName} ${sharesDisplay} 股`,
         `花费 ${tradeAmount} + 手续费 ${commission}`,
-        `当前持仓 ${this.currentHolding} 股`
+        `当前持仓 ${holdingDisplay} 股`
       ])
 
       this.advanceChart()
@@ -1071,7 +1162,7 @@ export default {
         // 显示交易弹窗
         const profitText = profit >= 0 ? `盈利 ${profit} 金币` : `亏损 ${Math.abs(profit)} 金币`
         this.showTradePopup('卖出平仓', [
-          `${stockName} ${soldShares} 股`,
+          `${stockName} ${this._formatShares(soldShares)} 股`,
           `${profitText}（手续费 ${commission}）`,
           '当前无持仓'
         ])
@@ -1092,6 +1183,7 @@ export default {
 
         const riskPercent = GAME_CONFIG.tradeRiskPercent * multiplier
         const budget = Math.round(this.totalAsset * riskPercent)
+        // 真实模式：小数股；新手模式：整数股
         const sharesToShort = Math.max(1, Math.floor(budget / currentPrice))
         const tradeAmount = Math.round(sharesToShort * currentPrice)
         const commission = Math.max(1, Math.round(tradeAmount * GAME_CONFIG.commissionRate))
@@ -1112,9 +1204,9 @@ export default {
 
         // 显示交易弹窗
         this.showTradePopup(`${multiplierText}做空成功`, [
-          `${stockName} ${sharesToShort} 股`,
+          `${stockName} ${this._formatShares(sharesToShort)} 股`,
           `保证金 ${tradeAmount} + 手续费 ${commission}`,
-          `做空 ${Math.abs(this.currentHolding)} 股`
+          `做空 ${this._formatShares(Math.abs(this.currentHolding))} 股`
         ])
       } else {
         // 加空 - 需要检查资金
@@ -1125,6 +1217,7 @@ export default {
 
         const riskPercent = GAME_CONFIG.tradeRiskPercent * multiplier
         const budget = Math.round(this.totalAsset * riskPercent)
+        // 真实模式：小数股；新手模式：整数股
         const sharesToShort = Math.max(1, Math.floor(budget / currentPrice))
         const tradeAmount = Math.round(sharesToShort * currentPrice)
         const commission = Math.max(1, Math.round(tradeAmount * GAME_CONFIG.commissionRate))
@@ -1147,9 +1240,9 @@ export default {
 
         // 显示交易弹窗
         this.showTradePopup(`${multiplierText}加空成功`, [
-          `${stockName} ${sharesToShort} 股`,
+          `${stockName} ${this._formatShares(sharesToShort)} 股`,
           `保证金 ${tradeAmount} + 手续费 ${commission}`,
-          `做空 ${Math.abs(this.currentHolding)} 股`
+          `做空 ${this._formatShares(Math.abs(this.currentHolding))} 股`
         ])
       }
 
@@ -1180,7 +1273,7 @@ export default {
       // 显示交易弹窗
       const profitText = profit >= 0 ? `盈利 ${profit} 金币` : `亏损 ${Math.abs(profit)} 金币`
       this.showTradePopup('平空成功', [
-        `${stockName} ${shares} 股`,
+        `${stockName} ${this._formatShares(shares)} 股`,
         `${profitText}（手续费 ${commission}）`,
         '当前无持仓'
       ])
@@ -1240,6 +1333,7 @@ export default {
     },
 
     advanceChart(generateAI = true) {
+      const prevIndex = this.currentIndex
       setTimeout(() => {
         // 计算推进步数
         const recentKlines = this.allKlineData.slice(
@@ -1265,7 +1359,8 @@ export default {
 
         this.currentIndex = Math.min(this.currentIndex + advanceSteps, this.allKlineData.length - 10)
         this.currentDecision++
-        this.drawChart()
+        this.drawChart({ animate: true, advanceFrom: prevIndex })
+        this._randomizeSpots()
 
         // 生成AI建议（跳过时不生成）
         if (generateAI) {
@@ -1297,10 +1392,28 @@ export default {
     },
 
     // === 绘制K线图 ===
-    drawChart() {
+    drawChart(options = {}) {
+      const { animate = false, advanceFrom = -1 } = options
+
       // 使用缓存的 Canvas，避免重复查询（真机上查询需要 250ms+）
       if (this._cachedCanvas && this._cachedCtx && this._cachedDimensions) {
-        this._renderKlines(this._cachedCanvas, this._cachedCtx, this._cachedDimensions)
+        const canvas = this._cachedCanvas
+        const ctx = this._cachedCtx
+        const dims = this._cachedDimensions
+
+        if (animate) {
+          if (this.gameMode === 'beginner') {
+            this._startLineGrowthAnimation(canvas, ctx, dims, advanceFrom)
+          } else {
+            this._startGrowthAnimation(canvas, ctx, dims, advanceFrom)
+          }
+        } else {
+          if (this.gameMode === 'beginner') {
+            this._renderLineChart(canvas, ctx, dims)
+          } else {
+            this._renderKlines(canvas, ctx, dims)
+          }
+        }
         return
       }
 
@@ -1341,7 +1454,19 @@ export default {
           this._cachedCtx = ctx
           this._cachedDimensions = { width, height, dpr }
 
-          this._renderKlines(canvas, ctx, this._cachedDimensions)
+          if (animate) {
+            if (this.gameMode === 'beginner') {
+              this._startLineGrowthAnimation(canvas, ctx, this._cachedDimensions, advanceFrom)
+            } else {
+              this._startGrowthAnimation(canvas, ctx, this._cachedDimensions, advanceFrom)
+            }
+          } else {
+            if (this.gameMode === 'beginner') {
+              this._renderLineChart(canvas, ctx, this._cachedDimensions)
+            } else {
+              this._renderKlines(canvas, ctx, this._cachedDimensions)
+            }
+          }
         })
     },
 
@@ -1364,8 +1489,12 @@ export default {
       if (!visibleData.length) return
 
       const prices = visibleData.flatMap(k => [k.high, k.low])
-      const minPrice = Math.min(...prices) * 0.95
-      const maxPrice = Math.max(...prices) * 1.05
+      const rawMin = Math.min(...prices)
+      const rawMax = Math.max(...prices)
+      const range = rawMax - rawMin || rawMax * 0.01
+      const padding = range * 0.15
+      const minPrice = rawMin - padding
+      const maxPrice = rawMax + padding
       const priceRange = maxPrice - minPrice || 1
       const y = (p) => height - ((p - minPrice) / priceRange * height)
 
@@ -1432,6 +1561,492 @@ export default {
 
     },
 
+    // === 新手模式：面积线图渲染 ===
+    _renderLineChart(canvas, ctx, dimensions) {
+      const { width, height } = dimensions
+
+      // 背景
+      ctx.fillStyle = '#121328'
+      ctx.fillRect(0, 0, width, height)
+
+      if (!this.allKlineData?.length) return
+
+      const gapBars = 4
+      const renderCount = Math.max(1, this.visibleKlines - gapBars)
+      const startIdx = Math.max(0, this.currentIndex - renderCount)
+      const visibleData = this.allKlineData.slice(startIdx, this.currentIndex)
+      if (!visibleData.length) return
+
+      const prices = visibleData.flatMap(k => [k.high, k.low])
+      const rawMin = Math.min(...prices)
+      const rawMax = Math.max(...prices)
+      const range = rawMax - rawMin || rawMax * 0.01
+      const padding = range * 0.15
+      const minPrice = rawMin - padding
+      const maxPrice = rawMax + padding
+      const priceRange = maxPrice - minPrice || 1
+      const y = (p) => height - ((p - minPrice) / priceRange * height)
+      const barWidth = width / this.visibleKlines
+
+      // 网格
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)'
+      ctx.lineWidth = 1
+      for (let i = 1; i < 5; i++) {
+        const pos = (height / 5) * i
+        ctx.beginPath()
+        ctx.moveTo(0, pos)
+        ctx.lineTo(width, pos)
+        ctx.stroke()
+      }
+
+      // 面积图：线条
+      ctx.beginPath()
+      visibleData.forEach((k, i) => {
+        const x = i * barWidth + barWidth / 2
+        i === 0 ? ctx.moveTo(x, y(k.close)) : ctx.lineTo(x, y(k.close))
+      })
+
+      ctx.strokeStyle = 'rgba(160, 210, 255, 0.9)'
+      ctx.lineWidth = 2.5
+      ctx.lineJoin = 'round'
+      ctx.stroke()
+
+      // 面积图：渐变填充（闭合路径向下）
+      const firstX = barWidth / 2
+      const lastX = (visibleData.length - 1) * barWidth + barWidth / 2
+      ctx.lineTo(lastX, height)
+      ctx.lineTo(firstX, height)
+      ctx.closePath()
+
+      const gradient = ctx.createLinearGradient(0, 0, 0, height)
+      gradient.addColorStop(0, 'rgba(100, 180, 255, 0.25)')
+      gradient.addColorStop(1, 'rgba(100, 180, 255, 0.0)')
+      ctx.fillStyle = gradient
+      ctx.fill()
+
+      // 交易标记
+      this.decisions.forEach(d => {
+        if (d.index >= startIdx && d.index < this.currentIndex) {
+          const markerX = (d.index - startIdx) * barWidth + barWidth / 2
+          const kline = this.allKlineData[d.index]
+          if (!kline) return
+
+          const markerY = y(kline.close) - 12
+          ctx.fillStyle = d.type === 'buy' ? '#4BE3A4' : '#FF6B6B'
+          ctx.beginPath()
+          ctx.arc(markerX, markerY, 5, 0, 2 * Math.PI)
+          ctx.fill()
+
+          ctx.fillStyle = '#fff'
+          ctx.font = '9px sans-serif'
+          const label = d.type === 'buy' ? '买' : (d.type === 'sell' ? '卖' : '空')
+          ctx.fillText(label, markerX - 4, markerY + 3)
+        }
+      })
+    },
+
+    // 新手模式：面积线图生长动画
+    _startLineGrowthAnimation(canvas, ctx, dims, advanceFrom) {
+      this._cancelAllAnimations()
+      this._isAnimating = true
+
+      const { width, height } = dims
+      const gapBars = 4
+      const renderCount = Math.max(1, this.visibleKlines - gapBars)
+      const startIdx = Math.max(0, this.currentIndex - renderCount)
+      const visibleData = this.allKlineData.slice(startIdx, this.currentIndex)
+
+      if (!visibleData.length) {
+        this._isAnimating = false
+        return
+      }
+
+      const prices = visibleData.flatMap(k => [k.high, k.low])
+      const rawMin = Math.min(...prices)
+      const rawMax = Math.max(...prices)
+      const range = rawMax - rawMin || rawMax * 0.01
+      const padding = range * 0.15
+      const minPrice = rawMin - padding
+      const maxPrice = rawMax + padding
+      const priceRange = maxPrice - minPrice || 1
+      const y = (p) => height - ((p - minPrice) / priceRange * height)
+      const barWidth = width / this.visibleKlines
+
+      const TOTAL_DURATION = 1500
+      const startTime = Date.now()
+      const decisions = this.decisions
+      const allKlineData = this.allKlineData
+      const currentIndex = this.currentIndex
+
+      const step = () => {
+        const elapsed = Date.now() - startTime
+        const progress = Math.min(elapsed / TOTAL_DURATION, 1.0)
+        const easedProgress = this._easeOutCubic(progress)
+
+        // 背景
+        ctx.fillStyle = '#121328'
+        ctx.fillRect(0, 0, width, height)
+
+        // 网格
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)'
+        ctx.lineWidth = 1
+        for (let gi = 1; gi < 5; gi++) {
+          const pos = (height / 5) * gi
+          ctx.beginPath()
+          ctx.moveTo(0, pos)
+          ctx.lineTo(width, pos)
+          ctx.stroke()
+        }
+
+        // 裁剪区域：从左向右逐渐展开
+        const clipWidth = easedProgress * width
+        ctx.save()
+        ctx.beginPath()
+        ctx.rect(0, 0, clipWidth, height)
+        ctx.clip()
+
+        // 面积图：线条
+        ctx.beginPath()
+        visibleData.forEach((k, i) => {
+          const x = i * barWidth + barWidth / 2
+          i === 0 ? ctx.moveTo(x, y(k.close)) : ctx.lineTo(x, y(k.close))
+        })
+
+        ctx.strokeStyle = 'rgba(160, 210, 255, 0.9)'
+        ctx.lineWidth = 2.5
+        ctx.lineJoin = 'round'
+        ctx.stroke()
+
+        // 面积图：渐变填充
+        const firstX = barWidth / 2
+        const lastX = (visibleData.length - 1) * barWidth + barWidth / 2
+        ctx.lineTo(lastX, height)
+        ctx.lineTo(firstX, height)
+        ctx.closePath()
+
+        const gradient = ctx.createLinearGradient(0, 0, 0, height)
+        gradient.addColorStop(0, 'rgba(100, 180, 255, 0.25)')
+        gradient.addColorStop(1, 'rgba(100, 180, 255, 0.0)')
+        ctx.fillStyle = gradient
+        ctx.fill()
+
+        // 交易标记（裁剪区域内）
+        decisions.forEach(d => {
+          if (d.index >= startIdx && d.index < currentIndex) {
+            const markerX = (d.index - startIdx) * barWidth + barWidth / 2
+            const kline = allKlineData[d.index]
+            if (!kline) return
+
+            const markerY = y(kline.close) - 12
+            ctx.fillStyle = d.type === 'buy' ? '#4BE3A4' : '#FF6B6B'
+            ctx.beginPath()
+            ctx.arc(markerX, markerY, 5, 0, 2 * Math.PI)
+            ctx.fill()
+
+            ctx.fillStyle = '#fff'
+            ctx.font = '9px sans-serif'
+            const label = d.type === 'buy' ? '买' : (d.type === 'sell' ? '卖' : '空')
+            ctx.fillText(label, markerX - 4, markerY + 3)
+          }
+        })
+
+        ctx.restore()
+
+        if (progress < 1.0) {
+          this._animFrameId = canvas.requestAnimationFrame(step)
+        } else {
+          this._isAnimating = false
+          this._animFrameId = null
+          this._startDotPulseAnimation(canvas, ctx, dims)
+        }
+      }
+
+      this._animFrameId = canvas.requestAnimationFrame(step)
+    },
+
+    // 新手模式：最后数据点脉冲闪烁动画
+    _startDotPulseAnimation(canvas, ctx, dims) {
+      const { width, height } = dims
+      const gapBars = 4
+      const renderCount = Math.max(1, this.visibleKlines - gapBars)
+      const startIdx = Math.max(0, this.currentIndex - renderCount)
+      const visibleData = this.allKlineData.slice(startIdx, this.currentIndex)
+
+      if (!visibleData.length) return
+
+      const prices = visibleData.flatMap(k => [k.high, k.low])
+      const rawMin = Math.min(...prices)
+      const rawMax = Math.max(...prices)
+      const range = rawMax - rawMin || rawMax * 0.01
+      const padding = range * 0.15
+      const minPrice = rawMin - padding
+      const maxPrice = rawMax + padding
+      const priceRange = maxPrice - minPrice || 1
+      const y = (p) => height - ((p - minPrice) / priceRange * height)
+      const barWidth = width / this.visibleKlines
+
+      const lastPoint = visibleData[visibleData.length - 1]
+      const dotX = (visibleData.length - 1) * barWidth + barWidth / 2
+      const dotY = y(lastPoint.close)
+
+      const startTime = Date.now()
+
+      const pulse = () => {
+        const elapsed = Date.now() - startTime
+
+        // 全量重绘基础线图
+        this._renderLineChart(canvas, ctx, dims)
+
+        // 脉冲圆点
+        ctx.save()
+        const glowSize = 6 + Math.sin(elapsed / 300) * 6
+        ctx.shadowColor = 'rgba(160, 210, 255, 0.8)'
+        ctx.shadowBlur = glowSize
+        ctx.fillStyle = '#fff'
+        ctx.beginPath()
+        ctx.arc(dotX, dotY, 4, 0, 2 * Math.PI)
+        ctx.fill()
+        ctx.restore()
+
+        this._flickerFrameId = canvas.requestAnimationFrame(pulse)
+      }
+
+      this._flickerFrameId = canvas.requestAnimationFrame(pulse)
+    },
+
+    // === K线动画系统 ===
+    _startGrowthAnimation(canvas, ctx, dims, advanceFrom) {
+      this._cancelAllAnimations()
+      this._isAnimating = true
+
+      const { width, height } = dims
+
+      const gapBars = 4
+      const renderCount = Math.max(1, this.visibleKlines - gapBars)
+      const startIdx = Math.max(0, this.currentIndex - renderCount)
+      const endIdx = this.currentIndex
+      const visibleData = this.allKlineData.slice(startIdx, endIdx)
+
+      if (!visibleData.length) {
+        this._isAnimating = false
+        return
+      }
+
+      // 确定哪些蜡烛是"新"的（需要动画）
+      let newStartVisibleIdx = 0
+      if (advanceFrom >= 0) {
+        newStartVisibleIdx = Math.max(0, advanceFrom - startIdx)
+      }
+      const totalNewCandles = visibleData.length - newStartVisibleIdx
+
+      if (totalNewCandles <= 0) {
+        this._renderKlines(canvas, ctx, dims)
+        this._isAnimating = false
+        return
+      }
+
+      const prices = visibleData.flatMap(k => [k.high, k.low])
+      const rawMin = Math.min(...prices)
+      const rawMax = Math.max(...prices)
+      const range = rawMax - rawMin || rawMax * 0.01
+      const padding = range * 0.15
+      const minPrice = rawMin - padding
+      const maxPrice = rawMax + padding
+      const priceRange = maxPrice - minPrice || 1
+      const y = (p) => height - ((p - minPrice) / priceRange * height)
+
+      const barWidth = width / this.visibleKlines
+      const TOTAL_DURATION = 1500
+      const startTime = Date.now()
+      const decisions = this.decisions
+      const allKlineData = this.allKlineData
+
+      const step = () => {
+        const elapsed = Date.now() - startTime
+        const progress = Math.min(elapsed / TOTAL_DURATION, 1.0)
+
+        // 背景
+        ctx.fillStyle = '#121328'
+        ctx.fillRect(0, 0, width, height)
+
+        // 网格
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)'
+        ctx.lineWidth = 1
+        for (let gi = 1; gi < 5; gi++) {
+          const pos = (height / 5) * gi
+          ctx.beginPath()
+          ctx.moveTo(0, pos)
+          ctx.lineTo(width, pos)
+          ctx.stroke()
+        }
+
+        // 逐根画蜡烛
+        visibleData.forEach((k, index) => {
+          const x = index * barWidth + barWidth / 2
+          const isUp = k.close >= k.open
+          const color = isUp ? '#4BE3A4' : '#FF6B6B'
+
+          // 计算缩放：旧蜡烛全高，新蜡烛按进度生长
+          let scale = 1.0
+          if (index >= newStartVisibleIdx) {
+            const newIdx = index - newStartVisibleIdx
+            const N = totalNewCandles
+            const candleStart = (newIdx / N) * 0.7
+            const candleDuration = 0.3
+            const candleEnd = candleStart + candleDuration
+
+            if (progress < candleStart) {
+              return // 还没到这根蜡烛
+            } else if (progress >= candleEnd) {
+              scale = 1.0
+            } else {
+              scale = this._easeOutCubic((progress - candleStart) / candleDuration)
+            }
+          }
+
+          const highY = y(k.high)
+          const lowY = y(k.low)
+          const bodyTop = y(Math.max(k.open, k.close))
+          const bodyBottom = y(Math.min(k.open, k.close))
+
+          // 从最低价位置向上生长
+          let sHighY, sBodyTop, sBodyBottom
+          if (scale < 1.0) {
+            sHighY = lowY - (lowY - highY) * scale
+            sBodyTop = lowY - (lowY - bodyTop) * scale
+            sBodyBottom = lowY - (lowY - bodyBottom) * scale
+          } else {
+            sHighY = highY
+            sBodyTop = bodyTop
+            sBodyBottom = bodyBottom
+          }
+
+          const bodyHeight = Math.max(sBodyBottom - sBodyTop, 1)
+
+          // 上下影线
+          ctx.strokeStyle = color
+          ctx.lineWidth = 1
+          ctx.beginPath()
+          ctx.moveTo(x, sHighY)
+          ctx.lineTo(x, lowY)
+          ctx.stroke()
+
+          // 实体
+          if (isUp) {
+            ctx.fillStyle = '#121328'
+            ctx.fillRect(x - barWidth / 3, sBodyTop, barWidth * 2 / 3, bodyHeight)
+            ctx.strokeStyle = '#4BE3A4'
+            ctx.lineWidth = 1.5
+            ctx.strokeRect(x - barWidth / 3, sBodyTop, barWidth * 2 / 3, bodyHeight)
+          } else {
+            ctx.fillStyle = '#FF6B6B'
+            ctx.fillRect(x - barWidth / 3, sBodyTop, barWidth * 2 / 3, bodyHeight)
+          }
+        })
+
+        // 交易标记
+        decisions.forEach(d => {
+          if (d.index >= startIdx && d.index < endIdx) {
+            const markerX = (d.index - startIdx) * barWidth + barWidth / 2
+            const kline = allKlineData[d.index]
+            if (!kline) return
+
+            const markerY = y(kline.high) - 12
+            ctx.fillStyle = d.type === 'buy' ? '#4BE3A4' : '#FF6B6B'
+            ctx.beginPath()
+            ctx.arc(markerX, markerY, 5, 0, 2 * Math.PI)
+            ctx.fill()
+
+            ctx.fillStyle = '#fff'
+            ctx.font = '9px sans-serif'
+            const label = d.type === 'buy' ? '买' : (d.type === 'sell' ? '卖' : '空')
+            ctx.fillText(label, markerX - 4, markerY + 3)
+          }
+        })
+
+        if (progress < 1.0) {
+          this._animFrameId = canvas.requestAnimationFrame(step)
+        } else {
+          this._isAnimating = false
+          this._animFrameId = null
+          this._startFlickerAnimation(canvas, ctx, dims)
+        }
+      }
+
+      this._animFrameId = canvas.requestAnimationFrame(step)
+    },
+
+    _startFlickerAnimation(canvas, ctx, dims) {
+      const { width, height } = dims
+
+      const gapBars = 4
+      const renderCount = Math.max(1, this.visibleKlines - gapBars)
+      const startIdx = Math.max(0, this.currentIndex - renderCount)
+      const endIdx = this.currentIndex
+      const visibleData = this.allKlineData.slice(startIdx, endIdx)
+
+      if (!visibleData.length) return
+
+      const lastCandle = visibleData[visibleData.length - 1]
+      const isUp = lastCandle.close >= lastCandle.open
+      const glowColor = isUp ? 'rgba(75, 227, 164, 0.8)' : 'rgba(255, 107, 107, 0.8)'
+
+      const barWidth = width / this.visibleKlines
+      const lastX = (visibleData.length - 1) * barWidth + barWidth / 2
+
+      const prices = visibleData.flatMap(k => [k.high, k.low])
+      const rawMin = Math.min(...prices)
+      const rawMax = Math.max(...prices)
+      const range = rawMax - rawMin || rawMax * 0.01
+      const padding = range * 0.15
+      const minPrice = rawMin - padding
+      const maxPrice = rawMax + padding
+      const priceRange = maxPrice - minPrice || 1
+      const y = (p) => height - ((p - minPrice) / priceRange * height)
+
+      const lastBodyTop = y(Math.max(lastCandle.open, lastCandle.close))
+      const lastBodyBottom = y(Math.min(lastCandle.open, lastCandle.close))
+      const lastBodyHeight = Math.max(lastBodyBottom - lastBodyTop, 1)
+
+      const startTime = Date.now()
+
+      const flicker = () => {
+        const elapsed = Date.now() - startTime
+        const shadowBlur = 8 + Math.sin(elapsed / 300) * 8
+
+        // 全量重绘基础K线
+        this._renderKlines(canvas, ctx, dims)
+
+        // 在最后一根蜡烛叠加 glow 效果
+        ctx.save()
+        ctx.shadowColor = glowColor
+        ctx.shadowBlur = shadowBlur
+        ctx.fillStyle = isUp ? '#4BE3A4' : '#FF6B6B'
+        ctx.fillRect(lastX - barWidth / 3, lastBodyTop, barWidth * 2 / 3, lastBodyHeight)
+        ctx.restore()
+
+        this._flickerFrameId = canvas.requestAnimationFrame(flicker)
+      }
+
+      this._flickerFrameId = canvas.requestAnimationFrame(flicker)
+    },
+
+    _cancelAllAnimations() {
+      if (this._animFrameId && this._cachedCanvas) {
+        this._cachedCanvas.cancelAnimationFrame(this._animFrameId)
+        this._animFrameId = null
+      }
+      if (this._flickerFrameId && this._cachedCanvas) {
+        this._cachedCanvas.cancelAnimationFrame(this._flickerFrameId)
+        this._flickerFrameId = null
+      }
+      this._isAnimating = false
+    },
+
+    _easeOutCubic(t) {
+      return 1 - Math.pow(1 - t, 3)
+    },
+
     // === 时间周期切换 ===
     getPeriodLabel(key) {
       return TIME_PERIODS[key]?.label || key
@@ -1451,6 +2066,18 @@ export default {
       const oldPeriod = this.currentPeriod
       console.log(`[切换周期] ${oldPeriod} -> ${periodKey}`)
 
+      // 真实模式：缓存当前周期状态（便于切回时即时恢复）
+      if (this.gameMode === 'real' && this.allKlineData?.length) {
+        if (!this._periodCache) this._periodCache = {}
+        this._periodCache[oldPeriod] = {
+          allKlineData: this.allKlineData,
+          currentIndex: this.currentIndex,
+          decisions: this.decisions,
+          currentDecision: this.currentDecision,
+          aiSuggestion: this.aiSuggestion
+        }
+      }
+
       // 更新周期
       this.currentPeriod = periodKey
       uni.setStorageSync('preferredPeriod', periodKey)
@@ -1462,60 +2089,85 @@ export default {
         return
       }
 
-      uni.showLoading({ title: '切换周期...' })
+      // 真实模式：查缓存
+      const cached = (this.gameMode === 'real' && this._periodCache) ? this._periodCache[periodKey] : null
 
-      try {
-        const dateRange = calculateDateRange(periodKey)
+      if (cached) {
+        // 即时恢复（0 API 调用）
+        this.allKlineData = cached.allKlineData
+        this.currentIndex = cached.currentIndex
+        this.decisions = cached.decisions
+        this.currentDecision = cached.currentDecision
+        this.aiSuggestion = cached.aiSuggestion
+
+        // 更新周期显示
         const periodConfig = TIME_PERIODS[periodKey]
+        this.currentStockInfo = {
+          ...this.currentStockInfo,
+          period: `${periodConfig.label} · 缓存`
+        }
+      } else {
+        // 无缓存：API 获取
+        uni.showLoading({ title: '切换周期...' })
 
-        const data = await fetchHistoricalData(
-          this.currentStockInfo.symbol,
-          dateRange.startDate,
-          dateRange.endDate,
-          {
-            multiplier: dateRange.multiplier,
-            timespan: dateRange.timespan
+        try {
+          const dateRange = calculateDateRange(periodKey)
+          const periodConfig = TIME_PERIODS[periodKey]
+
+          const data = await fetchHistoricalData(
+            this.currentStockInfo.symbol,
+            dateRange.startDate,
+            dateRange.endDate,
+            {
+              multiplier: dateRange.multiplier,
+              timespan: dateRange.timespan
+            }
+          )
+
+          if (data?.length) {
+            if (this.gameMode === 'beginner') {
+              this.allKlineData = extractGameSegment(data)
+            } else {
+              const prepared = prepareGameData(data)
+              this.allKlineData = (prepared && prepared.length > 20)
+                ? prepared
+                : generateMockData(300)
+            }
+          } else {
+            this.allKlineData = generateMockData(this.gameMode === 'beginner' ? 1000 : 300)
           }
-        )
 
-        if (data?.length) {
-          this.allKlineData = extractGameSegment(data)
-        } else {
-          this.allKlineData = generateMockData()
+          // 更新股票信息中的周期显示
+          this.currentStockInfo = {
+            ...this.currentStockInfo,
+            period: `${periodConfig.label} · ${periodConfig.description}`
+          }
+        } catch (error) {
+          console.error('[Game] switchPeriodView error:', error)
+          this.allKlineData = generateMockData(this.gameMode === 'beginner' ? 1000 : 300)
+          this.currentStockInfo = {
+            ...this.currentStockInfo,
+            period: `${TIME_PERIODS[periodKey]?.label || ''} · 模拟`
+          }
         }
 
-        // 更新股票信息中的周期显示
-        this.currentStockInfo = {
-          ...this.currentStockInfo,
-          period: `${periodConfig.label} · ${dateRange.timespan}`
-        }
-      } catch (error) {
-        console.error('[Game] switchPeriodView error:', error)
-        this.allKlineData = generateMockData()
-        this.currentStockInfo = {
-          ...this.currentStockInfo,
-          period: `${TIME_PERIODS[periodKey]?.label || ''} · 模拟`
-        }
+        // 重置 K线 位置和决策记录（旧索引无效），但保留持仓和资产
+        this.currentIndex = 20
+        this.decisions = []
+        this.currentDecision = 0
+        this.aiSuggestion = ''
+
+        uni.hideLoading()
       }
 
-      // 重置 K线 位置和决策记录（旧索引无效），但保留持仓和资产
-      this.currentIndex = 20
-      this.decisions = []
-      this.currentDecision = 0
-      this.aiSuggestion = ''
-
-      // 清除 Canvas 缓存，重新渲染
-      this._cachedCanvas = null
-      this._cachedCtx = null
-      this._cachedDimensions = null
-
-      uni.hideLoading()
+      // 停止动画（Canvas 缓存保留，不清除）
+      this._cancelAllAnimations()
 
       // 振动反馈
       uni.vibrateShort({ type: 'light' })
 
       this.$nextTick(() => {
-        this.drawChart()
+        this.drawChart({ animate: true })
       })
 
       // 保存游戏状态
@@ -1551,6 +2203,20 @@ export default {
         withShareTicket: true,
         menus: ['shareAppMessage', 'shareTimeline']
       })
+    },
+
+    async toggleGameMode() {
+      if (this.isProcessing) return
+      const newMode = this.gameMode === 'beginner' ? 'real' : 'beginner'
+      this.gameMode = newMode
+      uni.setStorageSync('gameMode', newMode)
+
+      // 保留当前股票，用新模式的数据管线重新加载
+      if (this.currentStockInfo) {
+        await this.loadNewStock(this.currentStockInfo, { silent: false })
+      }
+
+      uni.vibrateShort({ type: 'light' })
     },
 
     goToDeepAnalysis() {
@@ -1610,18 +2276,40 @@ export default {
   filter: blur(200rpx);
   opacity: 0.55;
   z-index: 0;
+  margin-top: 0;
+  margin-left: 0;
+  transition: top 0.8s cubic-bezier(0.25, 0.1, 0.25, 1), left 0.8s cubic-bezier(0.25, 0.1, 0.25, 1), margin 0.25s ease-out;
+  will-change: transform;
 }
 
 .spot-a {
   background: rgba(110, 231, 201, 0.18);
-  top: -200rpx;
-  left: -160rpx;
+  animation: spot-float-a 8s ease-in-out infinite;
 }
 
 .spot-b {
   background: rgba(40, 64, 110, 0.45);
-  right: -200rpx;
-  bottom: -220rpx;
+  animation: spot-float-b 10s ease-in-out infinite;
+}
+
+/* 光斑跟随滑动方向偏移（用 margin 避免与 transform 动画冲突） */
+.container.bg-buy .bg-spot { margin-left: 120rpx; }
+.container.bg-sell .bg-spot { margin-left: -120rpx; }
+.container.bg-next .bg-spot { margin-top: -120rpx; }
+
+/* 光斑缓慢浮动动画 */
+@keyframes spot-float-a {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(30rpx, 20rpx); }
+  50% { transform: translate(-20rpx, 40rpx); }
+  75% { transform: translate(25rpx, -15rpx); }
+}
+
+@keyframes spot-float-b {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-25rpx, -30rpx); }
+  50% { transform: translate(35rpx, -20rpx); }
+  75% { transform: translate(-15rpx, 25rpx); }
 }
 
 .top-bar {
@@ -2131,6 +2819,71 @@ export default {
   background: rgba(255, 255, 255, 0.65);
 }
 
+/* 模式切换图标 */
+.mode-icon {
+  width: 44rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 新手模式 - 波浪线图标 */
+.mode-wave {
+  width: 36rpx;
+  height: 24rpx;
+  position: relative;
+}
+
+.wave-line {
+  width: 100%;
+  height: 100%;
+  border-bottom: 4rpx solid rgba(160, 210, 255, 0.9);
+  border-radius: 0 0 50% 50%;
+  position: relative;
+}
+
+.wave-line::after {
+  content: '';
+  position: absolute;
+  bottom: -4rpx;
+  right: 0;
+  width: 50%;
+  height: 100%;
+  border-top: 4rpx solid rgba(160, 210, 255, 0.9);
+  border-radius: 50% 50% 0 0;
+}
+
+/* 真实模式 - 蜡烛图标 */
+.mode-candle {
+  width: 16rpx;
+  height: 40rpx;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.candle-wick {
+  width: 3rpx;
+  height: 100%;
+  background: rgba(75, 227, 164, 0.8);
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.candle-body {
+  width: 14rpx;
+  height: 20rpx;
+  background: rgba(75, 227, 164, 0.8);
+  border-radius: 2rpx;
+  position: absolute;
+  top: 10rpx;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 /* 2X 标签脉冲动画 */
 @keyframes pulse-green {
   0%, 100% {
@@ -2469,32 +3222,44 @@ export default {
 }
 
 /* 动态背景光斑 — 模仿游戏主界面 bg-spot 的溢出渐变 */
-/* 主光斑：左上角，覆盖大面积 */
+/* 主光斑：随机位置，覆盖大面积 */
 .picker-spot-a {
   position: absolute;
   width: 1000rpx;
   height: 1000rpx;
   border-radius: 50%;
   filter: blur(250rpx);
-  top: -300rpx;
-  left: -250rpx;
   z-index: 0;
   opacity: 0.75;
-  transition: background-color 0.5s ease;
+  transition: background-color 0.5s ease, top 0.6s cubic-bezier(0.25, 0.1, 0.25, 1), left 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
+  animation: picker-float-a 9s ease-in-out infinite;
+  will-change: transform;
 }
 
-/* 副光斑：右下角，补充环境光 */
+/* 副光斑：随机位置，补充环境光 */
 .picker-spot-b {
   position: absolute;
   width: 800rpx;
   height: 800rpx;
   border-radius: 50%;
   filter: blur(220rpx);
-  bottom: -250rpx;
-  right: -200rpx;
   z-index: 0;
   opacity: 0.5;
-  transition: background-color 0.5s ease;
+  transition: background-color 0.5s ease, top 0.6s cubic-bezier(0.25, 0.1, 0.25, 1), left 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
+  animation: picker-float-b 11s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes picker-float-a {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(40rpx, 25rpx); }
+  66% { transform: translate(-30rpx, 35rpx); }
+}
+
+@keyframes picker-float-b {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(-35rpx, -25rpx); }
+  66% { transform: translate(25rpx, -30rpx); }
 }
 
 /* 各市场光斑颜色 — 与卡片边框/标签保持一致 */
@@ -2547,6 +3312,7 @@ export default {
 
 /* === 轮盘卡片 — 2D 倾斜（与交易滑动一致） === */
 .picker-card {
+  position: relative;
   margin: 16rpx 8rpx 40rpx;
   height: 620rpx;
   border-radius: 28rpx;
@@ -2647,6 +3413,19 @@ export default {
   background: rgba(160, 100, 255, 0.2);
   color: #a064ff;
   border: 1rpx solid rgba(160, 100, 255, 0.35);
+}
+
+.picker-card-mock-badge {
+  position: absolute;
+  top: 20rpx;
+  right: 20rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 8rpx;
+  font-size: 20rpx;
+  font-weight: 600;
+  background: rgba(255, 170, 40, 0.25);
+  color: #ffaa28;
+  border: 1rpx solid rgba(255, 170, 40, 0.4);
 }
 
 .picker-card-name {
